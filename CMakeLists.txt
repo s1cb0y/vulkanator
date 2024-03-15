@@ -10,8 +10,9 @@ add_executable(vknator ${SOURCES})
 
 
 #include_directories(inc ${SDL2_INCLUDE_DIRS})
-target_include_directories(vknator PUBLIC inc ${SDL2_INCLUDE_DIRS})
+target_include_directories(vknator PUBLIC inc ${SDL2_INCLUDE_DIRS} vendor/spdlog/include)
 
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
-target_link_libraries(vknator ${VULKAN_LIBRARIES} ${SDL2_LIBRARIES} )
+
+target_link_libraries(vknator PRIVATE ${VULKAN_LIBRARIES} ${SDL2_LIBRARIES})

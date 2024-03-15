@@ -14,7 +14,8 @@ namespace vknator{
 
     private:
         SDL_Window* m_Window = nullptr;
-        VkExtent2D m_WindowSize{1920, 1080};
+        VkExtent2D m_WindowSize{1920, 1080};\
+        bool m_IsRunning = true;
     };
 
 }

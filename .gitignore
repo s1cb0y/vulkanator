@@ -1,0 +1,8 @@
+
+# Binaries
+**/build/
+
+# Folders
+.vs/
+.vscode/
+CMakeFiles/
