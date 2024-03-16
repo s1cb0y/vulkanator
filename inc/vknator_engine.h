@@ -15,10 +15,13 @@ namespace vknator{
         // Draw
         void Draw();
 
+    private:
 
+        void InitVulkan();
     private:
         SDL_Window* m_Window {nullptr};
         VkExtent2D m_WindowSize{1920, 1080};
+        VkInstance m_VkInstance;
         bool m_IsRunning {true};
         bool m_IsMinimized {false};
     };

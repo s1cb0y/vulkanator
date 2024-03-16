@@ -8,6 +8,7 @@
 CMakeFiles/
 
 # Files
+*.a
 Makefile
 CMakeCache.txt
 cmake_install.cmake

@@ -1,7 +1,7 @@
 #include "vknator_engine.h"
 #include "vknator_log.h"
 #include <SDL2/SDL.h>
-#include <iostream>
+#include <VkBootstrap.h>
 
 namespace vknator
 {
@@ -21,9 +21,10 @@ namespace vknator
                                         SDL_WINDOW_VULKAN);
         if (m_Window == NULL){
             LOG_ERROR("Error window creation");
-            std::cout << "Error window creation";
             success = false;
         }
+
+        InitVulkan();
 
         success ? LOG_DEBUG("Done") : LOG_DEBUG("Failed");
         return success;
@@ -68,6 +69,11 @@ namespace vknator
         //Quit SDL subsystems
         SDL_Quit();
         LOG_DEBUG("Done");
+    }
+
+    void VknatorEngine::InitVulkan(){
+        vkb::InstanceBuilder builder;
+
     }
 
 
