@@ -6,3 +6,8 @@
 .vs/
 .vscode/
 CMakeFiles/
+
+# Files
+Makefile
+CMakeCache.txt
+cmake_install.cmake

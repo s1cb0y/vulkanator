@@ -30,13 +30,33 @@ namespace vknator
     }
 
     void VknatorEngine::Run(){
+        LOG_DEBUG("Run engine...");
         SDL_Event event;
         while (m_IsRunning){
-            SDL_PollEvent(&event);
-            if (event.type == SDL_QUIT){
-                m_IsRunning = false;
+            while (SDL_PollEvent(&event)){
+                if (event.type == SDL_QUIT){
+                    m_IsRunning = false;
+                }
+                if (event.type == SDL_WINDOWEVENT){
+                    if (event.window.event == SDL_WINDOWEVENT_MINIMIZED){
+                        m_IsMinimized = true;
+                    }
+                    if (event.window.event == SDL_WINDOWEVENT_RESTORED){
+                        m_IsMinimized = false;
+                    }
+                }
             }
+            if (m_IsMinimized){
+                //throttle workload if window is minimized
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
+            Draw();
         }
+    }
+
+    void VknatorEngine::Draw(){
+        //TODO implement
     }
 
     void VknatorEngine::Deinit(){
