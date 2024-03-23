@@ -32,6 +32,7 @@ namespace vknator{
         void CreateSwapchain(uint32_t width, uint32_t height);
         void InitSwapchain();
         void InitCommands();
+        void InitSyncStructures();
         FrameData& GetCurrentFrame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP];}
 
     private:
@@ -49,10 +50,11 @@ namespace vknator{
         std::vector<VkImageView> m_SwapChainImageViews;
         VkQueue m_GraphicsQueue;
         uint8_t m_GraphicsQueueFamily;
+        FrameData m_Frames[FRAME_OVERLAP];
+
         bool m_IsRunning {true};
         bool m_IsMinimized {false};
         int m_FrameNumber {0};
-        FrameData m_Frames[FRAME_OVERLAP];
     };
 
 }
