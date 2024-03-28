@@ -2,59 +2,77 @@
 
 #include <SDL2/SDL.h>
 #include "vknator_types.h"
+#include <deque>
 
-namespace vknator{
+constexpr unsigned int FRAME_OVERLAP = 2;
 
-    constexpr unsigned int FRAME_OVERLAP = 2;
+struct DeletionQueue{
+    std::deque<std::function<void()>> deletors;
 
-    struct FrameData {
-        VkSemaphore swapchainSemaphore, renderSemaphore;
-        VkFence renderFence;
+    void PushFunction(std::function<void()>&& function){
+        deletors.push_back(function);
+    }
 
-        VkCommandPool commandPool;
-        VkCommandBuffer mainCommandBuffer;
-    };
+    void Flush(){
+        for (auto it = deletors.rbegin(); it != deletors.rend(); it++){
+            (*it)();
+        }
+        deletors.clear();
+    }
+};
+struct FrameData {
+    VkSemaphore swapchainSemaphore, renderSemaphore;
+    VkFence renderFence;
 
-    class VknatorEngine{
-    public:
-        //init engine
-        bool Init();
-        // deinit engine resource
-        void Deinit();
-        //run main loop
-        void Run();
-        // Draw
-        void Draw();
+    VkCommandPool commandPool;
+    VkCommandBuffer mainCommandBuffer;
 
-    private:
+    DeletionQueue deletionQueue;
+};
 
-        void InitVulkan();
-        void CreateSwapchain(uint32_t width, uint32_t height);
-        void InitSwapchain();
-        void InitCommands();
-        void InitSyncStructures();
-        FrameData& GetCurrentFrame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP];}
+class VknatorEngine{
+public:
+    //init engine
+    bool Init();
+    // deinit engine resource
+    void Deinit();
+    //run main loop
+    void Run();
+    // Draw
+    void Draw();
 
-    private:
-        SDL_Window* m_Window {nullptr};
-        VkExtent2D m_WindowSize{1920, 1080};
-        VkInstance m_VkInstance;
-        VkSurfaceKHR m_VkSurface;
-        VkDebugUtilsMessengerEXT m_VkDebugMessenger;
-        VkDevice m_VkDevice;
-        VkPhysicalDevice m_ActiveGPU;
-        VkSwapchainKHR m_SwapChain;
-        VkFormat m_SwapChainImageFormat;
-        VkExtent2D m_SwapChainExtent;
-        std::vector<VkImage> m_SwapChainImages;
-        std::vector<VkImageView> m_SwapChainImageViews;
-        VkQueue m_GraphicsQueue;
-        uint8_t m_GraphicsQueueFamily;
-        FrameData m_Frames[FRAME_OVERLAP];
+private:
 
-        bool m_IsRunning {true};
-        bool m_IsMinimized {false};
-        int m_FrameNumber {0};
-    };
+    void InitVulkan();
+    void CreateSwapchain(uint32_t width, uint32_t height);
+    void InitSwapchain();
+    void InitCommands();
+    void InitSyncStructures();
+    FrameData& GetCurrentFrame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP];}
+    void DrawBackground(VkCommandBuffer cmd);
 
-}
+private:
+    SDL_Window* m_Window {nullptr};
+    VkExtent2D m_WindowExtent{1920, 1080};
+    VkInstance m_VkInstance;
+    VkSurfaceKHR m_VkSurface;
+    VkDebugUtilsMessengerEXT m_VkDebugMessenger;
+    VkDevice m_VkDevice;
+    VkPhysicalDevice m_ActiveGPU;
+    VkSwapchainKHR m_SwapChain;
+    VkFormat m_SwapChainImageFormat;
+    VkExtent2D m_SwapChainExtent;
+    std::vector<VkImage> m_SwapChainImages;
+    std::vector<VkImageView> m_SwapChainImageViews;
+    VkQueue m_GraphicsQueue;
+    uint8_t m_GraphicsQueueFamily;
+    FrameData m_Frames[FRAME_OVERLAP];
+    DeletionQueue m_MainDeletionQueue;
+    VmaAllocator m_Allocator;
+    AllocatedImage m_DrawImage;
+    VkExtent2D m_DrawExtent;
+
+    bool m_IsRunning {true};
+    bool m_IsMinimized {false};
+    int m_FrameNumber {0};
+};

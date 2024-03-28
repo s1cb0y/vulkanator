@@ -2,17 +2,26 @@ find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
 # -------------------------- VK Bootstrap ----------------------
 add_library(vkbootstrap STATIC)
+add_library(spdlog INTERFACE)
 
 target_sources(vkbootstrap PRIVATE
-  vkbootstrap/VkBootstrap.h
-  vkbootstrap/VkBootstrap.cpp
-  )
+vkbootstrap/VkBootstrap.h
+vkbootstrap/VkBootstrap.cpp
+)
 
 target_include_directories(vkbootstrap PUBLIC vkbootstrap)
 target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
 set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
+
+# -------------------------- SPD Log ----------------------
+#add_library(spdlog::spdlog ALIAS spdlog)
+target_include_directories(spdlog INTERFACE spdlog/include)
+
+# -------------------------- Memory allocator ----------------------
+add_library(vma INTERFACE)
 #both vma and glm and header only libs so we only need the include path
-# target_include_directories(vma INTERFACE vma)
+target_include_directories(vma INTERFACE vma)
+
 
 # target_include_directories(glm INTERFACE glm)
 
