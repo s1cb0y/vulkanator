@@ -1,13 +1,14 @@
-#include "vknator_engine.h"
-#include "vknator_log.h"
+#include <vknator_engine.h>
+#include <vknator_log.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
 #include <VkBootstrap.h>
-#include "vknator_initializers.h"
+#include <vknator_initializers.h>
 #include <vknator_utils.h>
+
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-
+#include <vknator_pipelines.h>
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
 #else
@@ -38,6 +39,8 @@ bool VknatorEngine::Init(){
     InitSwapchain();
     InitCommands();
     InitSyncStructures();
+    InitDescriptors();
+    InitPipelines();
 
     success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
     return success;
@@ -91,7 +94,6 @@ void VknatorEngine::Draw(){
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     //make a clear-color from frame number. This will flash with a 120 frame period.
     DrawBackground(cmd);
-
     //make the swapchain image into presentable mode
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_SwapChainImages[swapChainImageIndex],VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -118,7 +120,6 @@ void VknatorEngine::Draw(){
     //submit command buffer to the queue and execute it.
     // _renderFence will now block until the graphic commands finish execution
     VK_CHECK(vkQueueSubmit2(m_GraphicsQueue, 1, &submit, GetCurrentFrame().renderFence));
-
     //prepare present
     // this will put the image we just rendered to into the visible window.
     // we want to wait on the _renderSemaphore for that,
@@ -135,21 +136,17 @@ void VknatorEngine::Draw(){
     presentInfo.pImageIndices = &swapChainImageIndex;
 
     VK_CHECK(vkQueuePresentKHR(m_GraphicsQueue, &presentInfo));
-
     m_FrameNumber++;
 }
 
 void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 {
-	//make a clear-color from frame number. This will flash with a 120 frame period.
-	VkClearColorValue clearValue;
-	float flash = abs(sin(m_FrameNumber / 120.f));
-	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
-
-	VkImageSubresourceRange clearRange = vknatorinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-	//clear image
-	vkCmdClearColorImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+	// bind the gradient drawing compute pipeline
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
+	// bind the descriptor set containing the draw image for the compute pipeline
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
+	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
+	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.0), std::ceil(m_DrawExtent.height / 16.0), 1);
 }
 
 void VknatorEngine::Deinit(){
@@ -334,6 +331,88 @@ void VknatorEngine::InitSyncStructures(){
         VK_CHECK(vkCreateSemaphore(m_VkDevice, &semaphoreCreateInfo, nullptr, &m_Frames[i].renderSemaphore));
     }
 }
+
+void VknatorEngine::InitDescriptors(){
+    //create a descriptor pool that will hold 10 sets with 1 image each
+	std::vector<DescriptorAllocator::PoolSizeRatio> sizes =
+	{
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
+	};
+
+    m_GlobalDescriptorAllocator.init_pool(m_VkDevice, 10, sizes);
+
+	//make the descriptor set layout for our compute draw
+	{
+		DescriptorLayoutBuilder builder;
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		m_DrawImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_COMPUTE_BIT);
+	}
+//< init_desc_1
+//
+//> init_desc_2
+	//allocate a descriptor set for our draw image
+	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.allocate(m_VkDevice, m_DrawImageDescriptorLayout);
+
+	VkDescriptorImageInfo imgInfo{};
+	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	imgInfo.imageView = m_DrawImage.imageView;
+
+	VkWriteDescriptorSet drawImageWrite = {};
+	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	drawImageWrite.pNext = nullptr;
+
+	drawImageWrite.dstBinding = 0;
+	drawImageWrite.dstSet = m_DrawImageDescriptors;
+	drawImageWrite.descriptorCount = 1;
+	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	drawImageWrite.pImageInfo = &imgInfo;
+
+	vkUpdateDescriptorSets(m_VkDevice, 1, &drawImageWrite, 0, nullptr);
+}
+
+void VknatorEngine::InitPipelines(){
+    InitBackgroundPipelines();
+}
+
+void VknatorEngine::InitBackgroundPipelines(){
+
+    VkPipelineLayoutCreateInfo computeLayout{};
+	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayout.pNext = nullptr;
+	computeLayout.pSetLayouts = &m_DrawImageDescriptorLayout;
+	computeLayout.setLayoutCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &computeLayout, nullptr, &m_GradientPipelineLayout));
+
+    //layout code
+	VkShaderModule computeDrawShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/gradient.comp.spv", m_VkDevice, &computeDrawShader))
+	{
+		LOG_ERROR("Error when building the compute shader");
+	}
+
+	VkPipelineShaderStageCreateInfo stageinfo{};
+	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageinfo.pNext = nullptr;
+	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageinfo.module = computeDrawShader;
+	stageinfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = m_GradientPipelineLayout;
+	computePipelineCreateInfo.stage = stageinfo;
+
+	VK_CHECK(vkCreateComputePipelines(m_VkDevice,VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &m_GradientPipeline));
+    vkDestroyShaderModule(m_VkDevice, computeDrawShader, nullptr);
+
+	m_MainDeletionQueue.PushFunction([&]() {
+		vkDestroyPipelineLayout(m_VkDevice, m_GradientPipelineLayout, nullptr);
+		vkDestroyPipeline(m_VkDevice, m_GradientPipeline, nullptr);
+    });
+}
+
 
 
 

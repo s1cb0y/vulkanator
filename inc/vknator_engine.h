@@ -3,6 +3,8 @@
 #include <SDL2/SDL.h>
 #include "vknator_types.h"
 #include <deque>
+#include "vknator_descriptors.h"
+#include <vknator_pipelines.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -48,8 +50,11 @@ private:
     void InitSwapchain();
     void InitCommands();
     void InitSyncStructures();
+    void InitDescriptors();
     FrameData& GetCurrentFrame() { return m_Frames[m_FrameNumber % FRAME_OVERLAP];}
     void DrawBackground(VkCommandBuffer cmd);
+    void InitPipelines();
+	void InitBackgroundPipelines();
 
 private:
     SDL_Window* m_Window {nullptr};
@@ -71,6 +76,13 @@ private:
     VmaAllocator m_Allocator;
     AllocatedImage m_DrawImage;
     VkExtent2D m_DrawExtent;
+
+    DescriptorAllocator m_GlobalDescriptorAllocator;
+    VkDescriptorSet m_DrawImageDescriptors;
+    VkDescriptorSetLayout m_DrawImageDescriptorLayout;
+
+    VkPipeline m_GradientPipeline;
+	VkPipelineLayout m_GradientPipelineLayout;
 
     bool m_IsRunning {true};
     bool m_IsMinimized {false};
