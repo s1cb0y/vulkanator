@@ -42,7 +42,10 @@ public:
     void Run();
     // Draw
     void Draw();
+    // ImmediateSubmit
     void ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function);
+    // Draw Imgui
+    void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 private:
 
     void InitVulkan();
