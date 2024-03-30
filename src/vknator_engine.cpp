@@ -41,6 +41,7 @@ bool VknatorEngine::Init(){
     InitSyncStructures();
     InitDescriptors();
     InitPipelines();
+    InitImGui();
 
     success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
     return success;
@@ -315,6 +316,12 @@ void VknatorEngine::InitCommands(){
         VkCommandBufferAllocateInfo cmdBufferAllocInfo = vknatorinit::command_buffer_allocate_info(m_Frames[i].commandPool, 1);
         VK_CHECK(vkAllocateCommandBuffers(m_VkDevice, &cmdBufferAllocInfo, &m_Frames[i].mainCommandBuffer));
     }
+//> imm_cmd
+    VK_CHECK(vkCreateCommandPool(m_VkDevice, &cmdPoolInfo, nullptr, &m_ImmCommandPool));
+    VkCommandBufferAllocateInfo cmdBufferAllocInfo = vknatorinit::command_buffer_allocate_info(m_ImmCommandPool, 1);
+    VK_CHECK(vkAllocateCommandBuffers(m_VkDevice, &cmdBufferAllocInfo, &m_ImmCommandBuffer));
+    m_MainDeletionQueue.PushFunction([=](){vkDestroyCommandPool(m_VkDevice, m_ImmCommandPool, nullptr);});
+//< imm_cmd
 }
 
 void VknatorEngine::InitSyncStructures(){
@@ -330,6 +337,10 @@ void VknatorEngine::InitSyncStructures(){
         VK_CHECK(vkCreateSemaphore(m_VkDevice, &semaphoreCreateInfo, nullptr, &m_Frames[i].swapchainSemaphore));
         VK_CHECK(vkCreateSemaphore(m_VkDevice, &semaphoreCreateInfo, nullptr, &m_Frames[i].renderSemaphore));
     }
+ //> imm_sync
+    VK_CHECK(vkCreateFence(m_VkDevice, &fenceCreateInfo, nullptr, &m_ImmFence));
+    m_MainDeletionQueue.PushFunction([=](){vkDestroyFence(m_VkDevice, m_ImmFence, nullptr);});
+ //< imm_sync
 }
 
 void VknatorEngine::InitDescriptors(){
@@ -411,6 +422,34 @@ void VknatorEngine::InitBackgroundPipelines(){
 		vkDestroyPipelineLayout(m_VkDevice, m_GradientPipelineLayout, nullptr);
 		vkDestroyPipeline(m_VkDevice, m_GradientPipeline, nullptr);
     });
+}
+
+void VknatorEngine::InitImGui(){
+    // do nothing
+}
+
+void VknatorEngine::ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function){
+    VK_CHECK(vkResetFences(m_VkDevice, 1, &m_ImmFence));
+	VK_CHECK(vkResetCommandBuffer(m_ImmCommandBuffer, 0));
+
+	VkCommandBuffer cmd = m_ImmCommandBuffer;
+
+	VkCommandBufferBeginInfo cmdBeginInfo = vknatorinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	function(cmd);
+
+	VK_CHECK(vkEndCommandBuffer(cmd));
+
+	VkCommandBufferSubmitInfo cmdinfo = vknatorinit::command_buffer_submit_info(cmd);
+	VkSubmitInfo2 submit = vknatorinit::submit_info(&cmdinfo, nullptr, nullptr);
+
+	// submit command buffer to the queue and execute it.
+	//  _renderFence will now block until the graphic commands finish execution
+	VK_CHECK(vkQueueSubmit2(m_GraphicsQueue, 1, &submit, m_ImmFence));
+
+	VK_CHECK(vkWaitForFences(m_VkDevice, 1, &m_ImmFence, true, 9999999999));
 }
 
 

@@ -42,7 +42,7 @@ public:
     void Run();
     // Draw
     void Draw();
-
+    void ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function);
 private:
 
     void InitVulkan();
@@ -55,6 +55,7 @@ private:
     void DrawBackground(VkCommandBuffer cmd);
     void InitPipelines();
 	void InitBackgroundPipelines();
+    void InitImGui();
 
 private:
     SDL_Window* m_Window {nullptr};
@@ -83,6 +84,12 @@ private:
 
     VkPipeline m_GradientPipeline;
 	VkPipelineLayout m_GradientPipelineLayout;
+
+    //immediate submit structures
+    VkFence m_ImmFence;
+    VkCommandBuffer m_ImmCommandBuffer;
+    VkCommandPool m_ImmCommandPool;
+
 
     bool m_IsRunning {true};
     bool m_IsMinimized {false};
