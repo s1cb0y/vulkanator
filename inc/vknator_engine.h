@@ -32,6 +32,13 @@ struct FrameData {
     DeletionQueue deletionQueue;
 };
 
+struct ComputePushConstants{
+    glm::vec4 data1;
+    glm::vec4 data2;
+    glm::vec4 data3;
+    glm::vec4 data4;
+};
+
 class VknatorEngine{
 public:
     //init engine
@@ -62,7 +69,7 @@ private:
 
 private:
     SDL_Window* m_Window {nullptr};
-    VkExtent2D m_WindowExtent{1920, 1080};
+    VkExtent2D m_WindowExtent{2560, 1440};
     VkInstance m_VkInstance;
     VkSurfaceKHR m_VkSurface;
     VkDebugUtilsMessengerEXT m_VkDebugMessenger;

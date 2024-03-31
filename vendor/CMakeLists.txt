@@ -18,12 +18,12 @@ set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
 target_include_directories(spdlog INTERFACE spdlog/include)
 
 # ------------------------------ Memory allocator ----------------------
-add_library(vma INTERFACE)
 #both vma and glm and header only libs so we only need the include path
+add_library(vma INTERFACE)
 target_include_directories(vma INTERFACE vma)
-
-
-# target_include_directories(glm INTERFACE glm)
+# ------------------------------ GLM ----------------------
+add_library(glm INTERFACE)
+target_include_directories(glm INTERFACE glm)
 
 # target_sources(tinyobjloader PRIVATE
 #   tinyobjloader/tiny_obj_loader.h

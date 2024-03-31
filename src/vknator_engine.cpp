@@ -170,6 +170,12 @@ void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
 	// bind the descriptor set containing the draw image for the compute pipeline
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
+
+    ComputePushConstants pc;
+    pc.data1 = glm::vec4{1,0,0,1};
+    pc.data2 = glm::vec4{0,0,1,1};
+
+    vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), (void*)&pc);
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.0), std::ceil(m_DrawExtent.height / 16.0), 1);
 }
@@ -428,11 +434,19 @@ void VknatorEngine::InitBackgroundPipelines(){
 	computeLayout.pSetLayouts = &m_DrawImageDescriptorLayout;
 	computeLayout.setLayoutCount = 1;
 
+    VkPushConstantRange pushConstant{};
+    pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pushConstant.offset = 0;
+    pushConstant.size = sizeof(ComputePushConstants);
+
+    computeLayout.pPushConstantRanges = &pushConstant;
+    computeLayout.pushConstantRangeCount = 1;
+
 	VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &computeLayout, nullptr, &m_GradientPipelineLayout));
 
     //layout code
 	VkShaderModule computeDrawShader;
-	if (!vknatorutils::LoadShaderModule("../shaders/gradient.comp.spv", m_VkDevice, &computeDrawShader))
+	if (!vknatorutils::LoadShaderModule("../shaders/gradient_color.comp.spv", m_VkDevice, &computeDrawShader))
 	{
 		LOG_ERROR("Error when building the compute shader");
 	}
