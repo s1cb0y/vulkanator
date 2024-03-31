@@ -39,6 +39,14 @@ struct ComputePushConstants{
     glm::vec4 data4;
 };
 
+struct ComputeEffect{
+    const char* name;
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+
+    ComputePushConstants data;
+};
+
 class VknatorEngine{
 public:
     //init engine
@@ -100,7 +108,10 @@ private:
     VkCommandBuffer m_ImmCommandBuffer;
     VkCommandPool m_ImmCommandPool;
 
+    //compute effects
+    std::vector<ComputeEffect> m_BackgroundEffects;
 
+    int m_CurrentBackgroundEffect{0};
     bool m_IsRunning {true};
     bool m_IsMinimized {false};
     int m_FrameNumber {0};

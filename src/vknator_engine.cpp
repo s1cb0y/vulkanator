@@ -80,7 +80,21 @@ void VknatorEngine::Run(){
         ImGui_ImplSDL2_NewFrame(m_Window);
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
+        if (ImGui::Begin("background")) {
+
+			ComputeEffect& selected = m_BackgroundEffects[m_CurrentBackgroundEffect];
+
+			ImGui::Text("Selected effect: ", selected.name);
+
+			ImGui::SliderInt("Effect Index", &m_CurrentBackgroundEffect,0, m_BackgroundEffects.size() - 1);
+
+			ImGui::InputFloat4("data1",(float*)& selected.data.data1);
+			ImGui::InputFloat4("data2",(float*)& selected.data.data2);
+			ImGui::InputFloat4("data3",(float*)& selected.data.data3);
+			ImGui::InputFloat4("data4",(float*)& selected.data.data4);
+
+			ImGui::End();
+		}
         //make imgui calculate internal draw structures
         ImGui::Render();
 
@@ -114,7 +128,7 @@ void VknatorEngine::Draw(){
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_SwapChainImages[swapChainImageIndex],VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 //< draw_first
-    //> imgui_draw
+//> imgui_draw
 	// execute a copy from the draw image into the swapchain
 	vknatorutils::CopyImageToImage(cmd, m_DrawImage.image, m_SwapChainImages[swapChainImageIndex], m_DrawExtent, m_SwapChainExtent);
 
@@ -166,8 +180,10 @@ void VknatorEngine::Draw(){
 
 void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 {
+    //get current effect
+    ComputeEffect& effect = m_BackgroundEffects[m_CurrentBackgroundEffect];
 	// bind the gradient drawing compute pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 	// bind the descriptor set containing the draw image for the compute pipeline
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
 
@@ -175,7 +191,7 @@ void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
     pc.data1 = glm::vec4{1,0,0,1};
     pc.data2 = glm::vec4{0,0,1,1};
 
-    vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), (void*)&pc);
+    vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.0), std::ceil(m_DrawExtent.height / 16.0), 1);
 }
@@ -445,17 +461,22 @@ void VknatorEngine::InitBackgroundPipelines(){
 	VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &computeLayout, nullptr, &m_GradientPipelineLayout));
 
     //layout code
-	VkShaderModule computeDrawShader;
-	if (!vknatorutils::LoadShaderModule("../shaders/gradient_color.comp.spv", m_VkDevice, &computeDrawShader))
+	VkShaderModule gradientShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/gradient_color.comp.spv", m_VkDevice, &gradientShader))
 	{
-		LOG_ERROR("Error when building the compute shader");
+		LOG_ERROR("Error when building the gradient shader");
+	}
+    VkShaderModule skyShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/sky.comp.spv", m_VkDevice, &skyShader))
+	{
+		LOG_ERROR("Error when building the sky shader");
 	}
 
 	VkPipelineShaderStageCreateInfo stageinfo{};
 	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stageinfo.pNext = nullptr;
 	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = computeDrawShader;
+	stageinfo.module = gradientShader;
 	stageinfo.pName = "main";
 
 	VkComputePipelineCreateInfo computePipelineCreateInfo{};
@@ -464,12 +485,37 @@ void VknatorEngine::InitBackgroundPipelines(){
 	computePipelineCreateInfo.layout = m_GradientPipelineLayout;
 	computePipelineCreateInfo.stage = stageinfo;
 
-	VK_CHECK(vkCreateComputePipelines(m_VkDevice,VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &m_GradientPipeline));
-    vkDestroyShaderModule(m_VkDevice, computeDrawShader, nullptr);
+    ComputeEffect gradient;
+    gradient.layout = m_GradientPipelineLayout;
+    gradient.name = "gradient";
+    gradient.data = {};
+
+    //default colors
+    gradient.data.data1 = glm::vec4(1, 0, 0, 1);
+    gradient.data.data2 = glm::vec4(0, 0, 1, 1);
+
+	VK_CHECK(vkCreateComputePipelines(m_VkDevice, VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &gradient.pipeline));
+
+    ComputeEffect sky;
+    sky.layout = m_GradientPipelineLayout;
+    sky.name = "sky";
+    sky.data = {};
+
+    //default sky parameters
+    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4 ,0.97);
+    VK_CHECK(vkCreateComputePipelines(m_VkDevice, VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &sky.pipeline));
+
+    // add the 2 background effects into array
+    m_BackgroundEffects.push_back(gradient);
+    m_BackgroundEffects.push_back(sky);
+    //destroy shader modules properly
+    vkDestroyShaderModule(m_VkDevice, gradientShader, nullptr);
+    vkDestroyShaderModule(m_VkDevice, skyShader, nullptr);
 
 	m_MainDeletionQueue.PushFunction([&]() {
 		vkDestroyPipelineLayout(m_VkDevice, m_GradientPipelineLayout, nullptr);
-		vkDestroyPipeline(m_VkDevice, m_GradientPipeline, nullptr);
+		vkDestroyPipeline(m_VkDevice, sky.pipeline, nullptr);
+        vkDestroyPipeline(m_VkDevice, gradient.pipeline, nullptr);
     });
 }
 
