@@ -335,7 +335,7 @@ void VknatorEngine::InitSwapchain()
     VK_CHECK(vkCreateImageView(m_VkDevice, &rview_info, nullptr, &m_DrawImage.imageView));
 
     //add to deletion queues
-    m_MainDeletionQueue.PushFunction([=]() {
+    m_MainDeletionQueue.PushFunction([=, *this]() {
         vkDestroyImageView(m_VkDevice, m_DrawImage.imageView, nullptr);
         vmaDestroyImage(m_Allocator, m_DrawImage.image, m_DrawImage.allocation);
     });
@@ -355,7 +355,7 @@ void VknatorEngine::InitCommands(){
     VK_CHECK(vkCreateCommandPool(m_VkDevice, &cmdPoolInfo, nullptr, &m_ImmCommandPool));
     VkCommandBufferAllocateInfo cmdBufferAllocInfo = vknatorinit::command_buffer_allocate_info(m_ImmCommandPool, 1);
     VK_CHECK(vkAllocateCommandBuffers(m_VkDevice, &cmdBufferAllocInfo, &m_ImmCommandBuffer));
-    m_MainDeletionQueue.PushFunction([=](){vkDestroyCommandPool(m_VkDevice, m_ImmCommandPool, nullptr);});
+    m_MainDeletionQueue.PushFunction([=, *this](){vkDestroyCommandPool(m_VkDevice, m_ImmCommandPool, nullptr);});
 //< imm_cmd
 }
 
@@ -374,7 +374,7 @@ void VknatorEngine::InitSyncStructures(){
     }
  //> imm_sync
     VK_CHECK(vkCreateFence(m_VkDevice, &fenceCreateInfo, nullptr, &m_ImmFence));
-    m_MainDeletionQueue.PushFunction([=](){vkDestroyFence(m_VkDevice, m_ImmFence, nullptr);});
+    m_MainDeletionQueue.PushFunction([=, *this](){vkDestroyFence(m_VkDevice, m_ImmFence, nullptr);});
  //< imm_sync
 }
 
@@ -516,7 +516,7 @@ void VknatorEngine::InitImGui(){
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 	// add the destroy the imgui created structures
-	m_MainDeletionQueue.PushFunction([=]() {
+	m_MainDeletionQueue.PushFunction([=, *this]() {
 		vkDestroyDescriptorPool(m_VkDevice, imguiPool, nullptr);
 		ImGui_ImplVulkan_Shutdown();
 	});
