@@ -496,6 +496,9 @@ void VknatorEngine::InitBackgroundPipelines(){
 
 	VK_CHECK(vkCreateComputePipelines(m_VkDevice, VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &gradient.pipeline));
 
+    //change the shader module only to create the sky shader
+    computePipelineCreateInfo.stage.module = skyShader;
+
     ComputeEffect sky;
     sky.layout = m_GradientPipelineLayout;
     sky.name = "sky";
