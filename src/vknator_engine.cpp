@@ -124,8 +124,10 @@ void VknatorEngine::Draw(){
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     //make a clear-color from frame number. This will flash with a 120 frame period.
     DrawBackground(cmd);
+    vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    DrawGeometry(cmd);
     //make the swapchain image into presentable mode
-    vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_SwapChainImages[swapChainImageIndex],VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 //< draw_first
 //> imgui_draw
@@ -196,6 +198,40 @@ void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.0), std::ceil(m_DrawExtent.height / 16.0), 1);
 }
 
+void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
+    //begin a render pass  connected to our draw image
+	VkRenderingAttachmentInfo colorAttachment = vknatorinit::attachment_info(m_DrawImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+
+	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_DrawExtent, &colorAttachment, nullptr);
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_TrianglePipeline);
+
+	//set dynamic viewport and scissor
+	VkViewport viewport = {};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = m_DrawExtent.width;
+	viewport.height = m_DrawExtent.height;
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor = {};
+	scissor.offset.x = 0;
+	scissor.offset.y = 0;
+	scissor.extent.width = m_DrawExtent.width;
+	scissor.extent.height = m_DrawExtent.height;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	//launch a draw command to draw 3 vertices
+	vkCmdDraw(cmd, 3, 1, 0, 0);
+
+	vkCmdEndRendering(cmd);
+}
+
 void VknatorEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView){
     VkRenderingAttachmentInfo colorAttachment = vknatorinit::attachment_info(targetImageView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
 	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_SwapChainExtent, &colorAttachment, nullptr);
@@ -212,6 +248,7 @@ void VknatorEngine::Deinit(){
 
     //wait for GPU to stop
     vkDeviceWaitIdle(m_VkDevice);
+
     m_MainDeletionQueue.Flush();
     // destroy command pools, which destroy all allocated command buffers
     for (int i = 0; i < FRAME_OVERLAP; i++){
@@ -220,6 +257,7 @@ void VknatorEngine::Deinit(){
         vkDestroyFence(m_VkDevice, m_Frames[i].renderFence, nullptr);
         vkDestroySemaphore(m_VkDevice, m_Frames[i].renderSemaphore, nullptr);
         vkDestroySemaphore(m_VkDevice ,m_Frames[i].swapchainSemaphore, nullptr);
+        m_Frames[i].deletionQueue.Flush();
     }
 
 
@@ -229,8 +267,9 @@ void VknatorEngine::Deinit(){
         vkDestroyImageView(m_VkDevice, m_SwapChainImageViews[i], nullptr);
     }
 
-    vkDestroyDevice(m_VkDevice, nullptr);
     vkDestroySurfaceKHR(m_VkInstance, m_VkSurface, nullptr);
+
+    vkDestroyDevice(m_VkDevice, nullptr);
     vkb::destroy_debug_utils_messenger(m_VkInstance, m_VkDebugMessenger);
     vkDestroyInstance(m_VkInstance, nullptr);
     //Destroy window
@@ -439,7 +478,10 @@ void VknatorEngine::InitDescriptors(){
 }
 
 void VknatorEngine::InitPipelines(){
+    //COMPUTE PIPELINE
     InitBackgroundPipelines();
+    // GRAPHICS PIPELINE
+    InitTrianglePipeline();
 }
 
 void VknatorEngine::InitBackgroundPipelines(){
@@ -520,6 +562,57 @@ void VknatorEngine::InitBackgroundPipelines(){
 		vkDestroyPipeline(m_VkDevice, sky.pipeline, nullptr);
         vkDestroyPipeline(m_VkDevice, gradient.pipeline, nullptr);
     });
+}
+
+void VknatorEngine::InitTrianglePipeline(){
+
+	VkShaderModule triangleFragShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/colored_triangle.frag.spv", m_VkDevice, &triangleFragShader))
+	{
+		LOG_ERROR("Error when building the triangle fragment shader");
+	}
+    VkShaderModule triangleVertexShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/colored_triangle.vert.spv", m_VkDevice, &triangleVertexShader))
+	{
+		LOG_ERROR("Error when building the triangle vertex shader");
+	}
+    //build the pipeline layout that controls the inputs/outputs of the shader
+	//we are not using descriptor sets or other systems yet, so no need to use anything other than empty default
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
+    vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_TrianglePipelineLayout);
+    PipelineBuilder pipelineBuilder;
+    pipelineBuilder.m_PipelineLayout = m_TrianglePipelineLayout;
+    //connecting the vertex and pixel shaders to the pipeline
+	pipelineBuilder.SetShaders(triangleVertexShader, triangleFragShader);
+	//it will draw triangles
+	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	//filled triangles
+	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
+	//no backface culling
+	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	//no multisampling
+	pipelineBuilder.SetMultisamplingNone();
+	//no blending
+	pipelineBuilder.DisableBlending();
+	//no depth testing
+	pipelineBuilder.DisableDepthtest();
+
+	//connect the image format we will draw into, from draw image
+	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
+	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
+
+	//finally build the pipeline
+	m_TrianglePipeline = pipelineBuilder.BuildPipeline(m_VkDevice);
+
+	//clean structures
+	vkDestroyShaderModule(m_VkDevice, triangleFragShader, nullptr);
+	vkDestroyShaderModule(m_VkDevice, triangleVertexShader, nullptr);
+
+	m_MainDeletionQueue.PushFunction([&]() {
+		vkDestroyPipelineLayout(m_VkDevice, m_TrianglePipelineLayout, nullptr);
+		vkDestroyPipeline(m_VkDevice, m_TrianglePipeline, nullptr);
+	});
+
 }
 
 void VknatorEngine::InitImGui(){

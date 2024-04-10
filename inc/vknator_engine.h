@@ -61,6 +61,8 @@ public:
     void ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function);
     // Draw Imgui
     void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
+    // Draw geometry
+    void DrawGeometry(VkCommandBuffer cmd);
 private:
 
     void InitVulkan();
@@ -73,6 +75,7 @@ private:
     void DrawBackground(VkCommandBuffer cmd);
     void InitPipelines();
 	void InitBackgroundPipelines();
+    void InitTrianglePipeline();
     void InitImGui();
 
 private:
@@ -102,6 +105,9 @@ private:
 
     VkPipeline m_GradientPipeline;
 	VkPipelineLayout m_GradientPipelineLayout;
+
+    VkPipeline m_TrianglePipeline;
+	VkPipelineLayout m_TrianglePipelineLayout;
 
     //immediate submit structures
     VkFence m_ImmFence;
