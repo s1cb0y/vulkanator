@@ -77,6 +77,9 @@ private:
 	void InitBackgroundPipelines();
     void InitTrianglePipeline();
     void InitImGui();
+    AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+    void DestroyBuffer(const AllocatedBuffer& buffer);
+    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 private:
     SDL_Window* m_Window {nullptr};
