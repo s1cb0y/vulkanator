@@ -43,5 +43,5 @@ set_property(TARGET vknator PROPERTY CXX_STANDARD 20)
 
 add_subdirectory(vendor)
 target_include_directories(vknator PUBLIC inc)
-target_link_libraries(vknator PRIVATE ${VULKAN_LIBRARIES} sdl2 spdlog vma vkbootstrap imgui)
+target_link_libraries(vknator PRIVATE ${VULKAN_LIBRARIES} SDL2::SDL2 spdlog vma glm vkbootstrap imgui)
 

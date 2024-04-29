@@ -1,5 +1,6 @@
 find_package(Vulkan REQUIRED)
-find_package(SDL2 REQUIRED)
+
+#find_package(SDL2 REQUIRED) # should be used if SDL2 has been installed via paket manager or installer
 # -------------------------- VK Bootstrap ----------------------
 add_library(vkbootstrap STATIC)
 add_library(spdlog INTERFACE)
@@ -34,11 +35,14 @@ target_include_directories(glm INTERFACE glm)
 
 
 # -------------------------------SDL2 ---------------------------------
-add_library(sdl2 INTERFACE)
-target_include_directories(sdl2 INTERFACE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(sdl2 INTERFACE ${SDL2_LIBRARIES})
 
-# target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
+# following lines should be used if SDL2 has been installed via paket manager or installer
+# add_library(sdl2 INTERFACE)
+# target_include_directories(sdl2 INTERFACE ${SDL2_INCLUDE_DIRS})
+# target_link_libraries(sdl2 INTERFACE ${SDL2_LIBRARIES})
+
+add_subdirectory(SDL EXCLUDE_FROM_ALL)
+
 
 
 # ------------------------------ ImGui ---------------------------------
@@ -58,6 +62,5 @@ target_sources(imgui PRIVATE
     imgui/imgui_impl_sdl2.cpp
   )
 
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan sdl2)
-
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL2::SDL2)
 # target_include_directories(stb_image INTERFACE stb_image)
