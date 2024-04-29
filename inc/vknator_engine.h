@@ -76,7 +76,9 @@ private:
     void InitPipelines();
 	void InitBackgroundPipelines();
     void InitTrianglePipeline();
+    void InitMeshPipeline();
     void InitImGui();
+    void InitDefaultData();
     AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     void DestroyBuffer(const AllocatedBuffer& buffer);
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
@@ -105,12 +107,16 @@ private:
     DescriptorAllocator m_GlobalDescriptorAllocator;
     VkDescriptorSet m_DrawImageDescriptors;
     VkDescriptorSetLayout m_DrawImageDescriptorLayout;
-
+    /* pipelines */
     VkPipeline m_GradientPipeline;
 	VkPipelineLayout m_GradientPipelineLayout;
 
     VkPipeline m_TrianglePipeline;
 	VkPipelineLayout m_TrianglePipelineLayout;
+
+    VkPipeline m_MeshPipeline;
+    VkPipelineLayout m_MeshPipelineLayout;
+    GPUMeshBuffers m_Rectangle;
 
     //immediate submit structures
     VkFence m_ImmFence;

@@ -47,6 +47,7 @@ bool VknatorEngine::Init(){
     InitDescriptors();
     InitPipelines();
     InitImGui();
+    InitDefaultData();
 
     success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
     return success;
@@ -228,6 +229,17 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 
 	//launch a draw command to draw 3 vertices
 	vkCmdDraw(cmd, 3, 1, 0, 0);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
+
+	GPUDrawPushConstants push_constants;
+	push_constants.worldMatrix = glm::mat4{ 1.f };
+	push_constants.vertexBuffer = m_Rectangle.vertexBufferAddress;
+
+	vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+	vkCmdBindIndexBuffer(cmd, m_Rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
 
 	vkCmdEndRendering(cmd);
 }
@@ -482,6 +494,7 @@ void VknatorEngine::InitPipelines(){
     InitBackgroundPipelines();
     // GRAPHICS PIPELINE
     InitTrianglePipeline();
+    InitMeshPipeline();
 }
 
 void VknatorEngine::InitBackgroundPipelines(){
@@ -615,6 +628,64 @@ void VknatorEngine::InitTrianglePipeline(){
 
 }
 
+void VknatorEngine::InitMeshPipeline(){
+
+	VkShaderModule triangleFragShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/colored_triangle.frag.spv", m_VkDevice, &triangleFragShader))
+	{
+		LOG_ERROR("Error when building the triangle fragment shader");
+	}
+    VkShaderModule triangleVertexShader;
+	if (!vknatorutils::LoadShaderModule("../shaders/colored_triangle_mesh.vert.spv", m_VkDevice, &triangleVertexShader))
+	{
+		LOG_ERROR("Error when building the triangle mesh vertex shader");
+	}
+    //build the pipeline layout that controls the inputs/outputs of the shader
+	//we are not using descriptor sets or other systems yet, so no need to use anything other than empty default
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
+    VkPushConstantRange bufferRange{};
+    bufferRange.offset = 0;
+    bufferRange.size = sizeof(GPUDrawPushConstants);
+    bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout);
+
+    PipelineBuilder pipelineBuilder;
+    pipelineBuilder.m_PipelineLayout = m_MeshPipelineLayout;
+    //connecting the vertex and pixel shaders to the pipeline
+	pipelineBuilder.SetShaders(triangleVertexShader, triangleFragShader);
+	//it will draw triangles
+	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	//filled triangles
+	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
+	//no backface culling
+	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	//no multisampling
+	pipelineBuilder.SetMultisamplingNone();
+	//no blending
+	pipelineBuilder.DisableBlending();
+	//no depth testing
+	pipelineBuilder.DisableDepthtest();
+
+	//connect the image format we will draw into, from draw image
+	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
+	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
+
+	//finally build the pipeline
+	m_MeshPipeline = pipelineBuilder.BuildPipeline(m_VkDevice);
+
+	//clean structures
+	vkDestroyShaderModule(m_VkDevice, triangleFragShader, nullptr);
+	vkDestroyShaderModule(m_VkDevice, triangleVertexShader, nullptr);
+
+	m_MainDeletionQueue.PushFunction([&]() {
+		vkDestroyPipelineLayout(m_VkDevice, m_MeshPipelineLayout, nullptr);
+		vkDestroyPipeline(m_VkDevice, m_MeshPipeline, nullptr);
+	});
+
+}
 void VknatorEngine::InitImGui(){
     /// 1: create descriptor pool for IMGUI
 	//  the size of the pool is very oversize, but it's copied from imgui demo
@@ -676,6 +747,33 @@ void VknatorEngine::InitImGui(){
 		vkDestroyDescriptorPool(m_VkDevice, imguiPool, nullptr);
 		ImGui_ImplVulkan_Shutdown();
 	});
+}
+
+void VknatorEngine::InitDefaultData() {
+	std::array<Vertex,4> rect_vertices;
+
+	rect_vertices[0].position = {0.5,-0.5, 0};
+	rect_vertices[1].position = {0.5,0.5, 0};
+	rect_vertices[2].position = {-0.5,-0.5, 0};
+	rect_vertices[3].position = {-0.5,0.5, 0};
+
+	rect_vertices[0].color = {0,0, 0,1};
+	rect_vertices[1].color = { 0.5,0.5,0.5 ,1};
+	rect_vertices[2].color = { 1,0, 0,1 };
+	rect_vertices[3].color = { 0,1, 0,1 };
+
+	std::array<uint32_t,6> rect_indices;
+
+	rect_indices[0] = 0;
+	rect_indices[1] = 1;
+	rect_indices[2] = 2;
+
+	rect_indices[3] = 2;
+	rect_indices[4] = 1;
+	rect_indices[5] = 3;
+
+	m_Rectangle = UploadMesh(rect_indices, rect_vertices);
+
 }
 
 void VknatorEngine::ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function){
