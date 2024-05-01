@@ -25,7 +25,8 @@ target_include_directories(vma INTERFACE vma)
 # ------------------------------ GLM ----------------------
 add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE glm)
-
+# ------------------------------ FastGltf ----------------------
+add_subdirectory(fastgltf)
 # target_sources(tinyobjloader PRIVATE
 #   tinyobjloader/tiny_obj_loader.h
 #   tinyobjloader/tiny_obj_loader.cc
