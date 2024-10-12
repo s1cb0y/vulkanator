@@ -5,6 +5,7 @@
 #include <deque>
 #include "vknator_descriptors.h"
 #include <vknator_pipelines.h>
+#include <vknator_loader.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -58,11 +59,13 @@ public:
     // Draw
     void Draw();
     // ImmediateSubmit
-    void ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function);
+    void ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&function);
     // Draw Imgui
     void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
     // Draw geometry
     void DrawGeometry(VkCommandBuffer cmd);
+
+    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 private:
 
     void InitVulkan();
@@ -79,9 +82,8 @@ private:
     void InitMeshPipeline();
     void InitImGui();
     void InitDefaultData();
-    AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+    AllocatedBuffer CreateBuffer(std::size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     void DestroyBuffer(const AllocatedBuffer& buffer);
-    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 private:
     SDL_Window* m_Window {nullptr};

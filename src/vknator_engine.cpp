@@ -737,7 +737,7 @@ void VknatorEngine::InitImGui(){
 	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
 
 	// execute a gpu command to upload imgui font textures
-	ImmediatSubmit([&](VkCommandBuffer cmd) { ImGui_ImplVulkan_CreateFontsTexture(cmd); });
+	ImmediateSubmit([&](VkCommandBuffer cmd) { ImGui_ImplVulkan_CreateFontsTexture(cmd); });
 
 	// clear font textures from cpu data
 	ImGui_ImplVulkan_DestroyFontUploadObjects();
@@ -776,7 +776,7 @@ void VknatorEngine::InitDefaultData() {
 
 }
 
-void VknatorEngine::ImmediatSubmit(std::function<void(VkCommandBuffer &cmd)>&&function){
+void VknatorEngine::ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&function){
     VK_CHECK(vkResetFences(m_VkDevice, 1, &m_ImmFence));
 	VK_CHECK(vkResetCommandBuffer(m_ImmCommandBuffer, 0));
 
@@ -832,15 +832,14 @@ GPUMeshBuffers VknatorEngine::UploadMesh(std::span<uint32_t> indices, std::span<
 
 	//create vertex buffer
 	newSurface.vertexBuffer = CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+		                                   VMA_MEMORY_USAGE_GPU_ONLY);
 
 	//find the adress of the vertex buffer
-	VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.vertexBuffer.buffer };
+	VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = newSurface.vertexBuffer.buffer };
 	newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(m_VkDevice, &deviceAdressInfo);
 
 	//create index buffer
-	newSurface.indexBuffer = CreateBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+	newSurface.indexBuffer = CreateBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
     // create temporal CPU writable staging buffer
     AllocatedBuffer staging = CreateBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
@@ -852,7 +851,7 @@ GPUMeshBuffers VknatorEngine::UploadMesh(std::span<uint32_t> indices, std::span<
 	// copy index buffer
 	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
 
-	ImmediatSubmit([&](VkCommandBuffer cmd) {
+	ImmediateSubmit([&](VkCommandBuffer cmd) {
 		VkBufferCopy vertexCopy{ 0 };
 		vertexCopy.dstOffset = 0;
 		vertexCopy.srcOffset = 0;

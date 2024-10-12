@@ -27,6 +27,9 @@ add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE glm)
 # ------------------------------ FastGltf ----------------------
 add_subdirectory(fastgltf)
+# ------------------------------ STB Image ----------------------
+add_library(stb_image INTERFACE)
+target_include_directories(stb_image INTERFACE stb_image)
 # target_sources(tinyobjloader PRIVATE
 #   tinyobjloader/tiny_obj_loader.h
 #   tinyobjloader/tiny_obj_loader.cc
@@ -64,4 +67,3 @@ target_sources(imgui PRIVATE
   )
 
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL2::SDL2)
-# target_include_directories(stb_image INTERFACE stb_image)
