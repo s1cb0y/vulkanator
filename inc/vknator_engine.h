@@ -132,4 +132,5 @@ private:
     bool m_IsRunning {true};
     bool m_IsMinimized {false};
     int m_FrameNumber {0};
+    std::vector<std::shared_ptr<MeshAsset>> m_testMeshes;
 };

@@ -14,6 +14,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
 
+#include "glm/gtx/transform.hpp"
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
 #else
@@ -240,6 +241,21 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	vkCmdBindIndexBuffer(cmd, m_Rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
+    // draw monkey head
+    push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
+
+    //flip monkey head
+    glm::mat4 view = glm::translate(glm::vec3{0,0, -0.5});
+    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 10000.f, 01.f);
+    // invert the Y direction on projection matrix so that we are more similar
+	// to opengl and gltf axis
+	projection[1][1] *= -1;
+    push_constants.worldMatrix = projection * view;
+    vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+    vkCmdBindIndexBuffer(cmd, m_testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdDrawIndexed(cmd, m_testMeshes[2]->surfaces[0].count, 1, m_testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
 	vkCmdEndRendering(cmd);
 }
@@ -773,6 +789,7 @@ void VknatorEngine::InitDefaultData() {
 	rect_indices[5] = 3;
 
 	m_Rectangle = UploadMesh(rect_indices, rect_vertices);
+    m_testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
 
 }
 
