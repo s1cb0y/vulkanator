@@ -243,15 +243,16 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
 
     // draw monkey head
-    push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
 
     //flip monkey head
-    glm::mat4 view = glm::translate(glm::vec3{0,0, -0.5});
-    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 10000.f, 01.f);
+    glm::mat4 view = glm::mat4{ 1.f }; //glm::translate(glm::vec3{0, 0, -5});
+    glm::mat4 projection = glm::mat4{ 1.f }; //glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 10000.f, 0.1f);
+
     // invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
 	projection[1][1] *= -1;
-    push_constants.worldMatrix = projection * view;
+    push_constants.worldMatrix =  projection * view;
+    push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
     vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
     vkCmdBindIndexBuffer(cmd, m_testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
