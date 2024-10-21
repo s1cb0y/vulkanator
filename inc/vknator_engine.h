@@ -105,6 +105,7 @@ private:
     VmaAllocator m_Allocator;
     AllocatedImage m_DrawImage;
     VkExtent2D m_DrawExtent;
+    AllocatedImage m_DepthImage;
 
     DescriptorAllocator m_GlobalDescriptorAllocator;
     VkDescriptorSet m_DrawImageDescriptors;

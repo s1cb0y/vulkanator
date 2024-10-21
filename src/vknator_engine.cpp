@@ -127,6 +127,7 @@ void VknatorEngine::Draw(){
     //make a clear-color from frame number. This will flash with a 120 frame period.
     DrawBackground(cmd);
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vknatorutils::TransitionImage(cmd, m_DepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     DrawGeometry(cmd);
     //make the swapchain image into presentable mode
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -203,8 +204,9 @@ void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     //begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vknatorinit::attachment_info(m_DrawImage.imageView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    VkRenderingAttachmentInfo depthAttachment = vknatorinit::depth_attachment_info(m_DepthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_DrawExtent, &colorAttachment, nullptr);
+	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_DrawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_TrianglePipeline);
@@ -277,6 +279,11 @@ void VknatorEngine::Deinit(){
 
     //wait for GPU to stop
     vkDeviceWaitIdle(m_VkDevice);
+
+    for (auto& mesh : m_testMeshes){
+        DestroyBuffer(mesh->meshBuffers.indexBuffer);
+        DestroyBuffer(mesh->meshBuffers.vertexBuffer);
+    }
 
     m_MainDeletionQueue.Flush();
     // destroy command pools, which destroy all allocated command buffers
@@ -403,31 +410,43 @@ void VknatorEngine::InitSwapchain()
     m_DrawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     m_DrawImage.imageExtent = drawImageExtent;
 
+    m_DepthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+    m_DepthImage.imageExtent = drawImageExtent;
+
     VkImageUsageFlags drawImageUsages{};
     drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
+    VkImageUsageFlags depthImageUsages{};
+    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
     VkImageCreateInfo rimg_info = vknatorinit::image_create_info(m_DrawImage.imageFormat, drawImageUsages, drawImageExtent);
+    VkImageCreateInfo dimg_info = vknatorinit::image_create_info(m_DepthImage.imageFormat, depthImageUsages, drawImageExtent);
 
     //for the draw image, we want to allocate it from gpu local memory
     VmaAllocationCreateInfo rimg_allocinfo = {};
     rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    //allocate and create the image
+    //allocate and create the images
     vmaCreateImage(m_Allocator, &rimg_info, &rimg_allocinfo, &m_DrawImage.image, &m_DrawImage.allocation, nullptr);
+    vmaCreateImage(m_Allocator, &dimg_info, &rimg_allocinfo, &m_DepthImage.image, &m_DepthImage.allocation, nullptr);
 
     //build a image-view for the draw image to use for rendering
     VkImageViewCreateInfo rview_info = vknatorinit::imageview_create_info(m_DrawImage.imageFormat, m_DrawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-
+    VkImageViewCreateInfo dview_info = vknatorinit::imageview_create_info(m_DepthImage.imageFormat, m_DepthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
     VK_CHECK(vkCreateImageView(m_VkDevice, &rview_info, nullptr, &m_DrawImage.imageView));
+    VK_CHECK(vkCreateImageView(m_VkDevice, &dview_info, nullptr, &m_DepthImage.imageView));
 
     //add to deletion queues
     m_MainDeletionQueue.PushFunction([=, *this]() {
         vkDestroyImageView(m_VkDevice, m_DrawImage.imageView, nullptr);
         vmaDestroyImage(m_Allocator, m_DrawImage.image, m_DrawImage.allocation);
+
+        vkDestroyImageView(m_VkDevice, m_DepthImage.imageView, nullptr);
+        vmaDestroyImage(m_Allocator, m_DepthImage.image, m_DepthImage.allocation);
     });
 //< init_swap
 
@@ -629,7 +648,7 @@ void VknatorEngine::InitTrianglePipeline(){
 
 	//connect the image format we will draw into, from draw image
 	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
-	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
+	pipelineBuilder.SetDepthFormat(m_DepthImage.imageFormat);
 
 	//finally build the pipeline
 	m_TrianglePipeline = pipelineBuilder.BuildPipeline(m_VkDevice);
@@ -683,12 +702,11 @@ void VknatorEngine::InitMeshPipeline(){
 	pipelineBuilder.SetMultisamplingNone();
 	//no blending
 	pipelineBuilder.DisableBlending();
-	//no depth testing
-	pipelineBuilder.DisableDepthtest();
-
+	// depth testing
+    pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 	//connect the image format we will draw into, from draw image
 	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
-	pipelineBuilder.SetDepthFormat(VK_FORMAT_UNDEFINED);
+	pipelineBuilder.SetDepthFormat(m_DepthImage.imageFormat);
 
 	//finally build the pipeline
 	m_MeshPipeline = pipelineBuilder.BuildPipeline(m_VkDevice);

@@ -32,6 +32,7 @@ public:
     void SetColorAttachmentFormat(VkFormat format);
     void SetDepthFormat(VkFormat format);
     void DisableDepthtest();
+    void EnableDepthtest(bool depthWriteEnable, VkCompareOp op);
 
     VkPipeline BuildPipeline(VkDevice device);
 };
