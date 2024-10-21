@@ -78,7 +78,6 @@ private:
     void DrawBackground(VkCommandBuffer cmd);
     void InitPipelines();
 	void InitBackgroundPipelines();
-    void InitTrianglePipeline();
     void InitMeshPipeline();
     void InitImGui();
     void InitDefaultData();
@@ -94,6 +93,7 @@ private:
     VkDevice m_VkDevice;
     VkPhysicalDevice m_ActiveGPU;
     VkSwapchainKHR m_SwapChain;
+
     VkFormat m_SwapChainImageFormat;
     VkExtent2D m_SwapChainExtent;
     std::vector<VkImage> m_SwapChainImages;
@@ -114,12 +114,8 @@ private:
     VkPipeline m_GradientPipeline;
 	VkPipelineLayout m_GradientPipelineLayout;
 
-    VkPipeline m_TrianglePipeline;
-	VkPipelineLayout m_TrianglePipelineLayout;
-
     VkPipeline m_MeshPipeline;
     VkPipelineLayout m_MeshPipelineLayout;
-    GPUMeshBuffers m_Rectangle;
 
     //immediate submit structures
     VkFence m_ImmFence;
