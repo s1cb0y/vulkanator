@@ -641,7 +641,8 @@ void VknatorEngine::InitMeshPipeline(){
 	//connect the image format we will draw into, from draw image
 	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
 	pipelineBuilder.SetDepthFormat(m_DepthImage.imageFormat);
-
+    // enable blending
+    pipelineBuilder.EnableBlendingAdditive();
 	//finally build the pipeline
 	m_MeshPipeline = pipelineBuilder.BuildPipeline(m_VkDevice);
 
