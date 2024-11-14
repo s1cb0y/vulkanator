@@ -48,8 +48,8 @@ bool VknatorEngine::Init(){
     InitSyncStructures();
     InitDescriptors();
     InitPipelines();
-    InitImGui();
     InitDefaultData();
+    InitImGui();
 
     success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
     return success;
@@ -273,9 +273,7 @@ void VknatorEngine::Deinit(){
         DestroyBuffer(mesh->meshBuffers.vertexBuffer);
     }
 
-    LOG_DEBUG("Flush...");
     m_MainDeletionQueue.Flush();
-    LOG_DEBUG("Flush after..");
     // destroy command pools, which destroy all allocated command buffers
     for (int i = 0; i < FRAME_OVERLAP; i++){
         vkDestroyCommandPool(m_VkDevice, m_Frames[i].commandPool, nullptr);
@@ -286,13 +284,11 @@ void VknatorEngine::Deinit(){
         m_Frames[i].deletionQueue.Flush();
     }
 
-
     // destroy swapchain resources
     vkDestroySwapchainKHR(m_VkDevice, m_SwapChain, nullptr);
     for (int i = 0; i < m_SwapChainImageViews.size(); i++) {
         vkDestroyImageView(m_VkDevice, m_SwapChainImageViews[i], nullptr);
     }
-
     vkDestroySurfaceKHR(m_VkInstance, m_VkSurface, nullptr);
 
     vkDestroyDevice(m_VkDevice, nullptr);
@@ -357,7 +353,7 @@ void VknatorEngine::InitVulkan(){
     allocatorInfo.instance = m_VkInstance;
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &m_Allocator);
-    m_MainDeletionQueue.PushFunction([&](){vmaDestroyAllocator(m_Allocator);});
+    m_MainDeletionQueue.PushFunction([&](){vmaDestroyAllocator(m_Allocator);}) ;
 
 }
 
@@ -597,8 +593,8 @@ void VknatorEngine::InitBackgroundPipelines(){
 
 	m_MainDeletionQueue.PushFunction([&]() {
 		vkDestroyPipelineLayout(m_VkDevice, m_GradientPipelineLayout, nullptr);
-		vkDestroyPipeline(m_VkDevice, sky.pipeline, nullptr);
-        vkDestroyPipeline(m_VkDevice, gradient.pipeline, nullptr);
+        vkDestroyPipeline(m_VkDevice, m_BackgroundEffects[0].pipeline, nullptr);
+        vkDestroyPipeline(m_VkDevice, m_BackgroundEffects[1].pipeline, nullptr);
     });
 }
 
