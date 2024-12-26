@@ -99,6 +99,8 @@ void VknatorEngine::Run(){
 			ImGui::InputFloat4("data3",(float*)& selected.data.data3);
 			ImGui::InputFloat4("data4",(float*)& selected.data.data4);
 
+            ImGui::SliderFloat("Render scale", &m_RenderScale, 0.0f, 1.0f);
+
 			ImGui::End();
 		}
         //make imgui calculate internal draw structures
@@ -125,8 +127,8 @@ void VknatorEngine::Draw(){
     VkCommandBufferBeginInfo cmdBeginInfo = vknatorinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 //> draw_first
-	m_DrawExtent.width = m_DrawImage.imageExtent.width;
-	m_DrawExtent.height = m_DrawImage.imageExtent.height;
+	m_DrawExtent.width  = std::min(m_DrawImage.imageExtent.width, m_SwapChainExtent.width) * m_RenderScale;
+	m_DrawExtent.height = std::min(m_DrawImage.imageExtent.height, m_SwapChainExtent.height) * m_RenderScale;
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
     // transition our main draw image into general layout so we can write into it
@@ -395,8 +397,10 @@ void VknatorEngine::InitSwapchain()
 //> init_swap
     //draw image size will match the window
     VkExtent3D drawImageExtent = {
-        m_WindowExtent.width,
-        m_WindowExtent.height,
+        3840, // TODO replace with generic solution
+        2160,
+        // m_WindowExtent.width,
+        // m_WindowExtent.height,
         1
     };
 
