@@ -83,6 +83,8 @@ private:
     void InitDefaultData();
     AllocatedBuffer CreateBuffer(std::size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     void DestroyBuffer(const AllocatedBuffer& buffer);
+    void DestroySwapchain();
+    void ResizeSwapchain();
 
 private:
     SDL_Window* m_Window {nullptr};
@@ -124,6 +126,8 @@ private:
 
     //compute effects
     std::vector<ComputeEffect> m_BackgroundEffects;
+
+    bool m_ResizeRequested {false};
 
     int m_CurrentBackgroundEffect{0};
     bool m_IsRunning {true};

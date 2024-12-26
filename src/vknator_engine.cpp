@@ -36,7 +36,7 @@ bool VknatorEngine::Init(){
                                     SDL_WINDOWPOS_UNDEFINED,
                                     m_WindowExtent.width,
                                     m_WindowExtent.height,
-                                    SDL_WINDOW_VULKAN);
+                                    SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (m_Window == NULL){
         LOG_ERROR("Error window creation");
         success = false;
@@ -78,6 +78,9 @@ void VknatorEngine::Run(){
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
+        if (m_ResizeRequested){
+            ResizeSwapchain();
+        }
         // imgui new frame
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame(m_Window);
@@ -112,7 +115,11 @@ void VknatorEngine::Draw(){
     VK_CHECK(vkResetFences(m_VkDevice, 1, &GetCurrentFrame().renderFence));
 
     uint32_t swapChainImageIndex;
-    VK_CHECK(vkAcquireNextImageKHR(m_VkDevice, m_SwapChain, 1000000000, GetCurrentFrame().swapchainSemaphore, nullptr, &swapChainImageIndex));
+    VkResult result = vkAcquireNextImageKHR(m_VkDevice, m_SwapChain, 1000000000, GetCurrentFrame().swapchainSemaphore, nullptr, &swapChainImageIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR){
+        m_ResizeRequested = true;
+        return;
+    }
     VkCommandBuffer cmd = GetCurrentFrame().mainCommandBuffer;
     VK_CHECK(vkResetCommandBuffer(cmd, 0));
     VkCommandBufferBeginInfo cmdBeginInfo = vknatorinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -180,7 +187,10 @@ void VknatorEngine::Draw(){
 
     presentInfo.pImageIndices = &swapChainImageIndex;
 
-    VK_CHECK(vkQueuePresentKHR(m_GraphicsQueue, &presentInfo));
+    result = vkQueuePresentKHR(m_GraphicsQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR){
+        m_ResizeRequested = true;
+    }
     m_FrameNumber++;
 }
 
@@ -285,10 +295,8 @@ void VknatorEngine::Deinit(){
     }
 
     // destroy swapchain resources
-    vkDestroySwapchainKHR(m_VkDevice, m_SwapChain, nullptr);
-    for (int i = 0; i < m_SwapChainImageViews.size(); i++) {
-        vkDestroyImageView(m_VkDevice, m_SwapChainImageViews[i], nullptr);
-    }
+    DestroySwapchain();
+
     vkDestroySurfaceKHR(m_VkInstance, m_VkSurface, nullptr);
 
     vkDestroyDevice(m_VkDevice, nullptr);
@@ -436,6 +444,26 @@ void VknatorEngine::InitSwapchain()
     });
 //< init_swap
 
+}
+
+void VknatorEngine::DestroySwapchain(){
+    vkDestroySwapchainKHR(m_VkDevice, m_SwapChain, nullptr);
+    for (int i = 0; i < m_SwapChainImageViews.size(); i++) {
+        vkDestroyImageView(m_VkDevice, m_SwapChainImageViews[i], nullptr);
+    }
+}
+
+void VknatorEngine::ResizeSwapchain(){
+    vkDeviceWaitIdle(m_VkDevice);
+
+    DestroySwapchain();
+    int h, w;
+    SDL_GetWindowSize(m_Window, &w, &h);
+    m_WindowExtent.height = h;
+    m_WindowExtent.width = w;
+
+    CreateSwapchain(m_WindowExtent.width, m_WindowExtent.height);
+    m_ResizeRequested = false;
 }
 
 void VknatorEngine::InitCommands(){
