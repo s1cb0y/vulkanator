@@ -109,7 +109,7 @@ private:
     VkExtent2D m_DrawExtent;
     AllocatedImage m_DepthImage;
 
-    DescriptorAllocator m_GlobalDescriptorAllocator;
+    DescriptorAllocatorGrowable m_GlobalDescriptorAllocator;
     VkDescriptorSet m_DrawImageDescriptors;
     VkDescriptorSetLayout m_DrawImageDescriptorLayout;
     /* pipelines */

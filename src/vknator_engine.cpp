@@ -397,7 +397,7 @@ void VknatorEngine::InitSwapchain()
 //> init_swap
     //draw image size will match the window
     VkExtent3D drawImageExtent = {
-        3840, // TODO replace with generic solution
+        3840, // TODO replace with generic
         2160,
         // m_WindowExtent.width,
         // m_WindowExtent.height,
@@ -507,12 +507,12 @@ void VknatorEngine::InitSyncStructures(){
 
 void VknatorEngine::InitDescriptors(){
     //create a descriptor pool that will hold 10 sets with 1 image each
-	std::vector<DescriptorAllocator::PoolSizeRatio> sizes =
+	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
 	{
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
 	};
 
-    m_GlobalDescriptorAllocator.init_pool(m_VkDevice, 10, sizes);
+    m_GlobalDescriptorAllocator.init(m_VkDevice, 10, sizes);
 
 	//make the descriptor set layout for our compute draw
 	{
@@ -520,31 +520,17 @@ void VknatorEngine::InitDescriptors(){
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		m_DrawImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
-//< init_desc_1
-//
-//> init_desc_2
+
 	//allocate a descriptor set for our draw image
 	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.allocate(m_VkDevice, m_DrawImageDescriptorLayout);
 
-	VkDescriptorImageInfo imgInfo{};
-	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-	imgInfo.imageView = m_DrawImage.imageView;
-
-	VkWriteDescriptorSet drawImageWrite = {};
-	drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	drawImageWrite.pNext = nullptr;
-
-	drawImageWrite.dstBinding = 0;
-	drawImageWrite.dstSet = m_DrawImageDescriptors;
-	drawImageWrite.descriptorCount = 1;
-	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	drawImageWrite.pImageInfo = &imgInfo;
-
-	vkUpdateDescriptorSets(m_VkDevice, 1, &drawImageWrite, 0, nullptr);
+	DescriptorWriter writer;
+    writer.write_image(0, m_DrawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.update_set(m_VkDevice, m_DrawImageDescriptors);
 }
 
 void VknatorEngine::InitPipelines(){
-    //COMPUTE PIPELINE
+    // COMPUTE PIPELINE
     InitBackgroundPipelines();
     // GRAPHICS PIPELINE
     InitMeshPipeline();
