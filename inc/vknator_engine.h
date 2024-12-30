@@ -31,6 +31,7 @@ struct FrameData {
     VkCommandBuffer mainCommandBuffer;
 
     DeletionQueue deletionQueue;
+    DescriptorAllocatorGrowable frameDescriptors;
 };
 
 struct ComputePushConstants{
@@ -46,6 +47,15 @@ struct ComputeEffect{
     VkPipelineLayout layout;
 
     ComputePushConstants data;
+};
+
+struct GPUSceneData{
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection;
+    glm::vec4 sunlightColor;
 };
 
 class VknatorEngine{
@@ -126,6 +136,10 @@ private:
 
     //compute effects
     std::vector<ComputeEffect> m_BackgroundEffects;
+
+    //scene data
+    GPUSceneData m_SceneData;
+    VkDescriptorSetLayout m_GPUSceneDataDescriptorSetLayout;
 
     bool m_ResizeRequested {false};
 

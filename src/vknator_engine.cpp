@@ -114,6 +114,7 @@ void VknatorEngine::Draw(){
 
     VK_CHECK(vkWaitForFences(m_VkDevice, 1, &GetCurrentFrame().renderFence, true, 1000000000));
     GetCurrentFrame().deletionQueue.Flush();
+    GetCurrentFrame().frameDescriptors.clear_pools(m_VkDevice);
     VK_CHECK(vkResetFences(m_VkDevice, 1, &GetCurrentFrame().renderFence));
 
     uint32_t swapChainImageIndex;
@@ -244,7 +245,6 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // draw monkey head
-
     //flip monkey head
     glm::mat4 view = glm::mat4{ 1.f }; //glm::translate(glm::vec3{0, 0, -5});
     glm::mat4 projection = glm::mat4{ 1.f }; //glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 10000.f, 0.1f);
@@ -261,6 +261,23 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     vkCmdDrawIndexed(cmd, m_testMeshes[2]->surfaces[0].count, 1, m_testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
 	vkCmdEndRendering(cmd);
+
+    AllocatedBuffer gpuSceneBuffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    GetCurrentFrame().deletionQueue.PushFunction([=, this](){
+        DestroyBuffer(gpuSceneBuffer);
+    });
+
+    //write data to buffer
+    GPUSceneData* gpuSceneData = (GPUSceneData*)gpuSceneBuffer.allocation->GetMappedData();
+    *gpuSceneData = m_SceneData;
+
+    //create descriptor set that binds that buffer and update it
+    VkDescriptorSet globalDescriptor = GetCurrentFrame().frameDescriptors.allocate(m_VkDevice, m_GPUSceneDataDescriptorSetLayout);
+    DescriptorWriter writer;
+    writer.write_buffer(0, gpuSceneBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    writer.update_set(m_VkDevice, globalDescriptor);
+
+
 }
 
 void VknatorEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView){
@@ -520,6 +537,12 @@ void VknatorEngine::InitDescriptors(){
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		m_DrawImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_COMPUTE_BIT);
 	}
+    // make the descriptor set for the scene data
+    {
+		DescriptorLayoutBuilder builder;
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		m_GPUSceneDataDescriptorSetLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
 
 	//allocate a descriptor set for our draw image
 	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.allocate(m_VkDevice, m_DrawImageDescriptorLayout);
@@ -527,6 +550,23 @@ void VknatorEngine::InitDescriptors(){
 	DescriptorWriter writer;
     writer.write_image(0, m_DrawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.update_set(m_VkDevice, m_DrawImageDescriptors);
+
+    for (int i = 0; i < FRAME_OVERLAP; i++){
+    // create a descriptor pool
+        std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,  3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+        };
+        m_Frames[i].frameDescriptors = DescriptorAllocatorGrowable();
+        m_Frames[i].frameDescriptors.init(m_VkDevice, 1000, frameSizes);
+
+        m_MainDeletionQueue.PushFunction([&,i](){
+            m_Frames[i].frameDescriptors.destroy_pools(m_VkDevice);
+        });
+
+   }
 }
 
 void VknatorEngine::InitPipelines(){
@@ -799,7 +839,7 @@ GPUMeshBuffers VknatorEngine::UploadMesh(std::span<uint32_t> indices, std::span<
 
 	//create vertex buffer
 	newSurface.vertexBuffer = CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		                                   VMA_MEMORY_USAGE_GPU_ONLY);
+							VMA_MEMORY_USAGE_GPU_ONLY);
 
 	//find the adress of the vertex buffer
 	VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = newSurface.vertexBuffer.buffer };
