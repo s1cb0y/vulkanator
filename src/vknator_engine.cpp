@@ -302,7 +302,6 @@ void VknatorEngine::Deinit(){
         DestroyBuffer(mesh->meshBuffers.vertexBuffer);
     }
 
-    m_MainDeletionQueue.Flush();
     // destroy command pools, which destroy all allocated command buffers
     for (int i = 0; i < FRAME_OVERLAP; i++){
         vkDestroyCommandPool(m_VkDevice, m_Frames[i].commandPool, nullptr);
@@ -312,6 +311,8 @@ void VknatorEngine::Deinit(){
         vkDestroySemaphore(m_VkDevice ,m_Frames[i].swapchainSemaphore, nullptr);
         m_Frames[i].deletionQueue.Flush();
     }
+
+    m_MainDeletionQueue.Flush();
 
     // destroy swapchain resources
     DestroySwapchain();
@@ -565,8 +566,12 @@ void VknatorEngine::InitDescriptors(){
         m_MainDeletionQueue.PushFunction([&,i](){
             m_Frames[i].frameDescriptors.destroy_pools(m_VkDevice);
         });
-
-   }
+    }
+    m_MainDeletionQueue.PushFunction([&](){
+        m_GlobalDescriptorAllocator.destroy_pools(m_VkDevice);
+        vkDestroyDescriptorSetLayout(m_VkDevice, m_DrawImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_VkDevice, m_GPUSceneDataDescriptorSetLayout, nullptr);
+    });
 }
 
 void VknatorEngine::InitPipelines(){

@@ -3,6 +3,7 @@
 #include "spdlog/spdlog.h"
 #include "spdlog/fmt/ostr.h" // enable proprietary type logging
 #include "vknator_types.h"
+
 namespace vknator{
     class Log{
     public:
