@@ -95,10 +95,14 @@ private:
     void DestroyBuffer(const AllocatedBuffer& buffer);
     void DestroySwapchain();
     void ResizeSwapchain();
+    AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+    AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+    void DestroyImage(const AllocatedImage& img);
+
 
 private:
     SDL_Window* m_Window {nullptr};
-    VkExtent2D m_WindowExtent{2560, 1440};
+    VkExtent2D m_WindowExtent{1700 , 900};
     VkInstance m_VkInstance;
     VkSurfaceKHR m_VkSurface;
     VkDebugUtilsMessengerEXT m_VkDebugMessenger;

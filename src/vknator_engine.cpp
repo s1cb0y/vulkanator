@@ -55,6 +55,7 @@ bool VknatorEngine::Init(){
     return success;
 }
 
+
 void VknatorEngine::Run(){
     LOG_DEBUG("Run engine...");
     SDL_Event event;
@@ -137,9 +138,12 @@ void VknatorEngine::Draw(){
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     //make a clear-color from frame number. This will flash with a 120 frame period.
     DrawBackground(cmd);
+
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_DepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
     DrawGeometry(cmd);
+
     //make the swapchain image into presentable mode
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_SwapChainImages[swapChainImageIndex],VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -245,13 +249,12 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // draw monkey head
-    //flip monkey head
-    glm::mat4 view = glm::mat4{ 1.f }; //glm::translate(glm::vec3{0, 0, -5});
-    glm::mat4 projection = glm::mat4{ 1.f }; //glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 10000.f, 0.1f);
+    glm::mat4 view = glm::translate(glm::vec3{0, 0, -5});
+    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 0.1f, 10000.f);
 
     // invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
-	projection[1][1] *= -1;
+    projection[1][1] *= -1;
 	GPUDrawPushConstants push_constants;
     push_constants.worldMatrix =  projection * view;
     push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
@@ -415,19 +418,14 @@ void VknatorEngine::InitSwapchain()
 //> init_swap
     //draw image size will match the window
     VkExtent3D drawImageExtent = {
-        3840, // TODO replace with generic
-        2160,
-        // m_WindowExtent.width,
-        // m_WindowExtent.height,
+        m_WindowExtent.width,
+        m_WindowExtent.height,
         1
     };
+//> Draw image
 
-    //hardcoding the draw format to 32 bit float
     m_DrawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     m_DrawImage.imageExtent = drawImageExtent;
-
-    m_DepthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
-    m_DepthImage.imageExtent = drawImageExtent;
 
     VkImageUsageFlags drawImageUsages{};
     drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -435,11 +433,7 @@ void VknatorEngine::InitSwapchain()
     drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
     drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    VkImageUsageFlags depthImageUsages{};
-    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
     VkImageCreateInfo rimg_info = vknatorinit::image_create_info(m_DrawImage.imageFormat, drawImageUsages, drawImageExtent);
-    VkImageCreateInfo dimg_info = vknatorinit::image_create_info(m_DepthImage.imageFormat, depthImageUsages, drawImageExtent);
 
     //for the draw image, we want to allocate it from gpu local memory
     VmaAllocationCreateInfo rimg_allocinfo = {};
@@ -448,12 +442,24 @@ void VknatorEngine::InitSwapchain()
 
     //allocate and create the images
     vmaCreateImage(m_Allocator, &rimg_info, &rimg_allocinfo, &m_DrawImage.image, &m_DrawImage.allocation, nullptr);
-    vmaCreateImage(m_Allocator, &dimg_info, &rimg_allocinfo, &m_DepthImage.image, &m_DepthImage.allocation, nullptr);
 
     //build a image-view for the draw image to use for rendering
     VkImageViewCreateInfo rview_info = vknatorinit::imageview_create_info(m_DrawImage.imageFormat, m_DrawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VkImageViewCreateInfo dview_info = vknatorinit::imageview_create_info(m_DepthImage.imageFormat, m_DepthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
     VK_CHECK(vkCreateImageView(m_VkDevice, &rview_info, nullptr, &m_DrawImage.imageView));
+
+//> Depth image
+
+    //hardcoding the draw format to 32 bit float
+    m_DepthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+    m_DepthImage.imageExtent = drawImageExtent;
+
+    VkImageUsageFlags depthImageUsages{};
+    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VkImageCreateInfo dimg_info = vknatorinit::image_create_info(m_DepthImage.imageFormat, depthImageUsages, drawImageExtent);
+    vmaCreateImage(m_Allocator, &dimg_info, &rimg_allocinfo, &m_DepthImage.image, &m_DepthImage.allocation, nullptr);
+
+    VkImageViewCreateInfo dview_info = vknatorinit::imageview_create_info(m_DepthImage.imageFormat, m_DepthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
     VK_CHECK(vkCreateImageView(m_VkDevice, &dview_info, nullptr, &m_DepthImage.imageView));
 
     //add to deletion queues
@@ -590,9 +596,9 @@ void VknatorEngine::InitBackgroundPipelines(){
 	computeLayout.setLayoutCount = 1;
 
     VkPushConstantRange pushConstant{};
-    pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     pushConstant.offset = 0;
     pushConstant.size = sizeof(ComputePushConstants);
+    pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
     computeLayout.pPushConstantRanges = &pushConstant;
     computeLayout.pushConstantRangeCount = 1;
@@ -633,7 +639,7 @@ void VknatorEngine::InitBackgroundPipelines(){
     gradient.data.data1 = glm::vec4(1, 0, 0, 1);
     gradient.data.data2 = glm::vec4(0, 0, 1, 1);
 
-	VK_CHECK(vkCreateComputePipelines(m_VkDevice, VK_NULL_HANDLE,1,&computePipelineCreateInfo, nullptr, &gradient.pipeline));
+	VK_CHECK(vkCreateComputePipelines(m_VkDevice, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
 
     //change the shader module only to create the sky shader
     computePipelineCreateInfo.stage.module = skyShader;
@@ -673,17 +679,19 @@ void VknatorEngine::InitMeshPipeline(){
 	{
 		LOG_ERROR("Error when building the triangle mesh vertex shader");
 	}
+
     //build the pipeline layout that controls the inputs/outputs of the shader
 	//we are not using descriptor sets or other systems yet, so no need to use anything other than empty default
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
     VkPushConstantRange bufferRange{};
     bufferRange.offset = 0;
     bufferRange.size = sizeof(GPUDrawPushConstants);
     bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
     pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
-    vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout);
+
+    VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout));
 
     PipelineBuilder pipelineBuilder;
     pipelineBuilder.m_PipelineLayout = m_MeshPipelineLayout;
@@ -882,6 +890,45 @@ GPUMeshBuffers VknatorEngine::UploadMesh(std::span<uint32_t> indices, std::span<
 	DestroyBuffer(staging);
 
 	return newSurface;
+}
+
+AllocatedImage VknatorEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped){
+    AllocatedImage image;
+    image.imageExtent = size;
+    image.imageFormat= format;
+
+    VkImageCreateInfo imgCreateInfo = vknatorinit::image_create_info(image.imageFormat, usage, image.imageExtent);
+    if (mipmapped){
+        imgCreateInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(size.width, size.height)))) + 1;
+    }
+    //always allocate images on dedicated GPU memeory
+    VmaAllocationCreateInfo vmaAllocInfo = {};
+    vmaAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    vmaAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    //allocate and create image
+    VK_CHECK(vmaCreateImage(m_Allocator, &imgCreateInfo, &vmaAllocInfo, &image.image, &image.allocation, nullptr));
+
+    // if the format is a depth image, the correct aspect flag must be used
+    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (VK_FORMAT_D32_SFLOAT == format){
+        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+
+    VkImageViewCreateInfo imgViewCreateInfo = vknatorinit::imageview_create_info(format, image.image, aspectFlags);
+    imgViewCreateInfo.subresourceRange.levelCount = imgCreateInfo.mipLevels;
+    VK_CHECK(vkCreateImageView(m_VkDevice, &imgViewCreateInfo, nullptr, &image.imageView));
+
+    return image;
+}
+
+AllocatedImage VknatorEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped){
+    AllocatedImage image;
+    size_t dataSize = size.depth * size.height * size.width * 4;
+    AllocatedBuffer uploadBuffer = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    memcpy(uploadBuffer.info.pMappedData, data, dataSize);
+
+    DestroyBuffer(uploadBuffer);
+    return image;
 }
 
 
