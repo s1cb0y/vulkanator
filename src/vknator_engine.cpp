@@ -41,15 +41,14 @@ bool VknatorEngine::Init(){
         LOG_ERROR("Error window creation");
         success = false;
     }
-
-    InitVulkan();
-    InitSwapchain();
-    InitCommands();
-    InitSyncStructures();
-    InitDescriptors();
-    InitPipelines();
-    InitDefaultData();
-    InitImGui();
+    LOG_DEBUG("Init vulkan...");        InitVulkan();
+    LOG_DEBUG("Init swapchain...");     InitSwapchain();
+    LOG_DEBUG("Init commands...");      InitCommands();
+    LOG_DEBUG("Init sync structres...");InitSyncStructures();
+    LOG_DEBUG("Init descriptors...");   InitDescriptors();
+    LOG_DEBUG("Init pipelines...");     InitPipelines();
+    LOG_DEBUG("Init default data...");  InitDefaultData();
+    LOG_DEBUG("Init ImGui ...");        InitImGui();
 
     success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
     return success;
@@ -248,6 +247,15 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+    // bind a texture
+    VkDescriptorSet imageSet = GetCurrentFrame().frameDescriptors.allocate(m_VkDevice, m_SingeImageDescriptorLayout);
+    {
+        DescriptorWriter writer;
+        writer.write_image(0, m_ErrorCheckerboardImage.imageView, m_DefaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.update_set(m_VkDevice, imageSet);
+    }
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
     // draw monkey head
     glm::mat4 view = glm::translate(glm::vec3{0, 0, -5});
     glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 0.1f, 10000.f);
@@ -258,6 +266,7 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	GPUDrawPushConstants push_constants;
     push_constants.worldMatrix =  projection * view;
     push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
+
     vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
     vkCmdBindIndexBuffer(cmd, m_testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -551,6 +560,13 @@ void VknatorEngine::InitDescriptors(){
 		m_GPUSceneDataDescriptorSetLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 
+    // make the descriptor set for the checkerboard texutre data
+    {
+		DescriptorLayoutBuilder builder;
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		m_SingeImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
+
 	//allocate a descriptor set for our draw image
 	m_DrawImageDescriptors = m_GlobalDescriptorAllocator.allocate(m_VkDevice, m_DrawImageDescriptorLayout);
 
@@ -670,7 +686,7 @@ void VknatorEngine::InitBackgroundPipelines(){
 void VknatorEngine::InitMeshPipeline(){
 
 	VkShaderModule triangleFragShader;
-	if (!vknatorutils::LoadShaderModule("../shaders/colored_triangle.frag.spv", m_VkDevice, &triangleFragShader))
+	if (!vknatorutils::LoadShaderModule("../shaders/text_image.frag.spv", m_VkDevice, &triangleFragShader))
 	{
 		LOG_ERROR("Error when building the triangle fragment shader");
 	}
@@ -690,6 +706,8 @@ void VknatorEngine::InitMeshPipeline(){
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
     pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_SingeImageDescriptorLayout;
+    pipelineLayoutInfo.setLayoutCount = 1;
 
     VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout));
 
@@ -793,6 +811,44 @@ void VknatorEngine::InitImGui(){
 void VknatorEngine::InitDefaultData() {
 
     m_testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
+
+    uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1 ,1));
+    m_WhiteImage = CreateImage((void*) &white, VkExtent3D{1,1,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f ,1));
+    m_GreyImage = CreateImage((void*) &grey, VkExtent3D{1,1,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0 ,0));
+    m_BlackImage = CreateImage((void*) &black, VkExtent3D{1,1,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    std::array<uint32_t, 16*16> pixels;
+    uint32_t mangenta = glm::packUnorm4x8(glm::vec4(1, 0, 1 ,1));
+    for (int x = 0; x < 16; x++){
+        for (int y = 0; y < 16; y++){
+            pixels[x + y * 16] = ((x % 2) ^ (y % 2)) ? mangenta : black;
+        }
+    }
+    m_ErrorCheckerboardImage = CreateImage((void*) pixels.data(), VkExtent3D{16,16,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    VkSamplerCreateInfo sampl_info = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST
+    };
+    vkCreateSampler(m_VkDevice, &sampl_info, nullptr, &m_DefaultSamplerNearest);
+
+    sampl_info.magFilter = VK_FILTER_LINEAR;
+    sampl_info.minFilter = VK_FILTER_LINEAR;
+    vkCreateSampler(m_VkDevice, &sampl_info, nullptr, &m_DefaultSamplerLinear);
+
+    m_MainDeletionQueue.PushFunction([&](){
+        vkDestroySampler(m_VkDevice, m_DefaultSamplerNearest, nullptr);
+        vkDestroySampler(m_VkDevice, m_DefaultSamplerLinear, nullptr);
+        DestroyImage(m_WhiteImage);
+        DestroyImage(m_GreyImage);
+        DestroyImage(m_BlackImage);
+        DestroyImage(m_ErrorCheckerboardImage);
+    });
 
 }
 
@@ -922,13 +978,43 @@ AllocatedImage VknatorEngine::CreateImage(VkExtent3D size, VkFormat format, VkIm
 }
 
 AllocatedImage VknatorEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped){
-    AllocatedImage image;
+
     size_t dataSize = size.depth * size.height * size.width * 4;
     AllocatedBuffer uploadBuffer = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     memcpy(uploadBuffer.info.pMappedData, data, dataSize);
 
+    AllocatedImage new_image = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+
+	ImmediateSubmit([&](VkCommandBuffer cmd) {
+		vknatorutils::TransitionImage(cmd, new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+		VkBufferImageCopy copyRegion = {};
+		copyRegion.bufferOffset = 0;
+		copyRegion.bufferRowLength = 0;
+		copyRegion.bufferImageHeight = 0;
+
+		copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.imageSubresource.mipLevel = 0;
+		copyRegion.imageSubresource.baseArrayLayer = 0;
+		copyRegion.imageSubresource.layerCount = 1;
+		copyRegion.imageExtent = size;
+
+		// copy the buffer into the image
+		vkCmdCopyBufferToImage(cmd, uploadBuffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+			&copyRegion);
+
+		vknatorutils::TransitionImage(cmd, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		});
+
+
     DestroyBuffer(uploadBuffer);
-    return image;
+    return new_image;
+}
+
+void VknatorEngine::DestroyImage(const AllocatedImage& img){
+    vkDestroyImageView(m_VkDevice, img.imageView, nullptr);
+    vmaDestroyImage(m_Allocator, img.image, img.allocation);
 }
 
 

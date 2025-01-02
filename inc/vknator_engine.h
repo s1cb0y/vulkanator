@@ -145,6 +145,17 @@ private:
     GPUSceneData m_SceneData;
     VkDescriptorSetLayout m_GPUSceneDataDescriptorSetLayout;
 
+    //textures
+    AllocatedImage m_WhiteImage;
+    AllocatedImage m_BlackImage;
+    AllocatedImage m_GreyImage;
+    AllocatedImage m_ErrorCheckerboardImage;
+
+    VkSampler m_DefaultSamplerLinear;
+    VkSampler m_DefaultSamplerNearest;
+
+    VkDescriptorSetLayout m_SingeImageDescriptorLayout;
+
     bool m_ResizeRequested {false};
 
     int m_CurrentBackgroundEffect{0};
