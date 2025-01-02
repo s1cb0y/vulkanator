@@ -24,7 +24,7 @@
 
 
 bool VknatorEngine::Init(){
-    LOG_DEBUG("Init engine...");
+    LOG_INFO("Init engine...");
 
     bool success = true;
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
@@ -50,13 +50,13 @@ bool VknatorEngine::Init(){
     LOG_DEBUG("Init default data...");  InitDefaultData();
     LOG_DEBUG("Init ImGui ...");        InitImGui();
 
-    success ? LOG_DEBUG("Init engine done") : LOG_DEBUG("Init engine failed");
+    success ? LOG_INFO("Init engine done") : LOG_ERROR("Init engine failed");
     return success;
 }
 
 
 void VknatorEngine::Run(){
-    LOG_DEBUG("Run engine...");
+    LOG_INFO("Run engine...");
     SDL_Event event;
     while (m_IsRunning){
         while (SDL_PollEvent(&event)){
@@ -242,8 +242,8 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	VkRect2D scissor = {};
 	scissor.offset.x = 0;
 	scissor.offset.y = 0;
-	scissor.extent.width = m_DrawExtent.width;
-	scissor.extent.height = m_DrawExtent.height;
+	scissor.extent.width = viewport.width;
+	scissor.extent.height = viewport.height;
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
@@ -304,7 +304,7 @@ void VknatorEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView){
 }
 
 void VknatorEngine::Deinit(){
-    LOG_DEBUG("Shut down engine...");
+    LOG_INFO("Shut down engine...");
 
     //wait for GPU to stop
     vkDeviceWaitIdle(m_VkDevice);
@@ -593,6 +593,7 @@ void VknatorEngine::InitDescriptors(){
         m_GlobalDescriptorAllocator.destroy_pools(m_VkDevice);
         vkDestroyDescriptorSetLayout(m_VkDevice, m_DrawImageDescriptorLayout, nullptr);
         vkDestroyDescriptorSetLayout(m_VkDevice, m_GPUSceneDataDescriptorSetLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_VkDevice, m_SingeImageDescriptorLayout, nullptr);
     });
 }
 
