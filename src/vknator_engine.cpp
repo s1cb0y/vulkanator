@@ -22,7 +22,7 @@
     const bool enableValidationLayers = true;
 #endif
 
-
+float z_axis = -5.f;
 bool VknatorEngine::Init(){
     LOG_INFO("Init engine...");
 
@@ -100,6 +100,7 @@ void VknatorEngine::Run(){
 			ImGui::InputFloat4("data4",(float*)& selected.data.data4);
 
             ImGui::SliderFloat("Render scale", &m_RenderScale, 0.0f, 1.0f);
+            ImGui::SliderFloat("z_axis", &z_axis, -5.0f, 1.0f);
 
 			ImGui::End();
 		}
@@ -209,10 +210,6 @@ void VknatorEngine::DrawBackground(VkCommandBuffer cmd)
 	// bind the descriptor set containing the draw image for the compute pipeline
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_GradientPipelineLayout, 0, 1, &m_DrawImageDescriptors, 0, nullptr);
 
-    ComputePushConstants pc;
-    pc.data1 = glm::vec4{1,0,0,1};
-    pc.data2 = glm::vec4{0,0,1,1};
-
     vkCmdPushConstants(cmd, m_GradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(m_DrawExtent.width / 16.0), std::ceil(m_DrawExtent.height / 16.0), 1);
@@ -256,9 +253,11 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     }
 
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
+
     // draw monkey head
-    glm::mat4 view = glm::translate(glm::vec3{0, 0, -5});
+    glm::mat4 view = glm::translate(glm::vec3{0, 0, z_axis});
     glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 0.1f, 10000.f);
+
 
     // invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
@@ -454,6 +453,7 @@ void VknatorEngine::InitSwapchain()
 
     //build a image-view for the draw image to use for rendering
     VkImageViewCreateInfo rview_info = vknatorinit::imageview_create_info(m_DrawImage.imageFormat, m_DrawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
     VK_CHECK(vkCreateImageView(m_VkDevice, &rview_info, nullptr, &m_DrawImage.imageView));
 
 //> Depth image
@@ -466,9 +466,11 @@ void VknatorEngine::InitSwapchain()
     depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     VkImageCreateInfo dimg_info = vknatorinit::image_create_info(m_DepthImage.imageFormat, depthImageUsages, drawImageExtent);
+
     vmaCreateImage(m_Allocator, &dimg_info, &rimg_allocinfo, &m_DepthImage.image, &m_DepthImage.allocation, nullptr);
 
     VkImageViewCreateInfo dview_info = vknatorinit::imageview_create_info(m_DepthImage.imageFormat, m_DepthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
     VK_CHECK(vkCreateImageView(m_VkDevice, &dview_info, nullptr, &m_DepthImage.imageView));
 
     //add to deletion queues
@@ -727,7 +729,7 @@ void VknatorEngine::InitMeshPipeline(){
 	//no blending
 	pipelineBuilder.DisableBlending();
 	// depth testing
-    pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
 	//connect the image format we will draw into, from draw image
 	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
 	pipelineBuilder.SetDepthFormat(m_DepthImage.imageFormat);
@@ -822,13 +824,14 @@ void VknatorEngine::InitDefaultData() {
     uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0 ,0));
     m_BlackImage = CreateImage((void*) &black, VkExtent3D{1,1,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    std::array<uint32_t, 16*16> pixels;
-    uint32_t mangenta = glm::packUnorm4x8(glm::vec4(1, 0, 1 ,1));
-    for (int x = 0; x < 16; x++){
-        for (int y = 0; y < 16; y++){
-            pixels[x + y * 16] = ((x % 2) ^ (y % 2)) ? mangenta : black;
-        }
-    }
+    uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1 ,1));
+    std::array<uint32_t, 16 *16 > pixels; //for 16x16 checkerboard texture
+	for (int x = 0; x < 16; x++) {
+		for (int y = 0; y < 16; y++) {
+			pixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+
     m_ErrorCheckerboardImage = CreateImage((void*) pixels.data(), VkExtent3D{16,16,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     VkSamplerCreateInfo sampl_info = {
@@ -1017,5 +1020,6 @@ void VknatorEngine::DestroyImage(const AllocatedImage& img){
     vkDestroyImageView(m_VkDevice, img.imageView, nullptr);
     vmaDestroyImage(m_Allocator, img.image, img.allocation);
 }
+
 
 
