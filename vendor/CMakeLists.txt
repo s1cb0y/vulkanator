@@ -24,6 +24,7 @@ add_library(vma INTERFACE)
 target_include_directories(vma INTERFACE vma)
 # ------------------------------ GLM ----------------------
 add_library(glm INTERFACE)
+target_compile_definitions(glm INTERFACE GLM_FORCE_DEPTH_ZERO_TO_ONE)
 target_include_directories(glm INTERFACE glm)
 # ------------------------------ FastGltf ----------------------
 add_subdirectory(fastgltf)

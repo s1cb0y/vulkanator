@@ -44,7 +44,7 @@ bool VknatorEngine::Init(){
     LOG_DEBUG("Init vulkan...");        InitVulkan();
     LOG_DEBUG("Init swapchain...");     InitSwapchain();
     LOG_DEBUG("Init commands...");      InitCommands();
-    LOG_DEBUG("Init sync structres...");InitSyncStructures();
+    LOG_DEBUG("Init sync structures...");InitSyncStructures();
     LOG_DEBUG("Init descriptors...");   InitDescriptors();
     LOG_DEBUG("Init pipelines...");     InitPipelines();
     LOG_DEBUG("Init default data...");  InitDefaultData();
@@ -57,6 +57,7 @@ bool VknatorEngine::Init(){
 
 void VknatorEngine::Run(){
     LOG_INFO("Run engine...");
+
     SDL_Event event;
     while (m_IsRunning){
         while (SDL_PollEvent(&event)){
@@ -257,7 +258,6 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     // draw monkey head
     glm::mat4 view = glm::translate(glm::vec3{0, 0, z_axis});
     glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 0.1f, 10000.f);
-
 
     // invert the Y direction on projection matrix so that we are more similar
 	// to opengl and gltf axis
@@ -734,7 +734,7 @@ void VknatorEngine::InitMeshPipeline(){
 	pipelineBuilder.SetColorAttachmentFormat(m_DrawImage.imageFormat);
 	pipelineBuilder.SetDepthFormat(m_DepthImage.imageFormat);
     // enable blending
-    pipelineBuilder.EnableBlendingAdditive();
+    //pipelineBuilder.EnableBlendingAdditive();
 	//finally build the pipeline
 	m_MeshPipeline = pipelineBuilder.BuildPipeline(m_VkDevice);
 
