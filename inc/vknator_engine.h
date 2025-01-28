@@ -58,6 +58,36 @@ struct GPUSceneData{
     glm::vec4 sunlightColor;
 };
 
+struct GLTFMetallic_Roughness{
+    MaterialPipeline opaquePipeline;
+    MaterialPipeline transparentPipeline;
+
+    VkDescriptorSetLayout materialLayout;
+
+    struct MaterialConstants{
+        glm::vec4 colorFactors;
+        glm::vec4 metal_rough_factors;
+        //padding, we need it anyway for uniform buffers (GPUs require minimum alignment size of 256 bytes)
+        glm::vec4 extra[14];
+    };
+
+    struct MaterialResources{
+        AllocatedImage colorImage;
+        VkSampler colorSampler;
+        AllocatedImage metalRoughImage;
+        VkSampler metalRoughSampler;
+        VkBuffer dataBuffer;
+        uint32_t dataBufferOffset;
+    };
+
+    DescriptorWriter writer;
+
+    void BuildPipelines(VknatorEngine* engine);
+    void ClearResources(VkDevice device);
+
+    MaterialInstance WriteMaterial(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
 class VknatorEngine{
 public:
     //init engine
@@ -76,8 +106,13 @@ public:
     void DrawGeometry(VkCommandBuffer cmd);
 
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
-private:
+public:
+    VkDevice m_VkDevice;
+    VkDescriptorSetLayout m_GPUSceneDataDescriptorSetLayout;
+    AllocatedImage m_DrawImage;
+    AllocatedImage m_DepthImage;
 
+private:
     void InitVulkan();
     void CreateSwapchain(uint32_t width, uint32_t height);
     void InitSwapchain();
@@ -106,7 +141,6 @@ private:
     VkInstance m_VkInstance;
     VkSurfaceKHR m_VkSurface;
     VkDebugUtilsMessengerEXT m_VkDebugMessenger;
-    VkDevice m_VkDevice;
     VkPhysicalDevice m_ActiveGPU;
     VkSwapchainKHR m_SwapChain;
 
@@ -119,9 +153,7 @@ private:
     FrameData m_Frames[FRAME_OVERLAP];
     DeletionQueue m_MainDeletionQueue;
     VmaAllocator m_Allocator;
-    AllocatedImage m_DrawImage;
     VkExtent2D m_DrawExtent;
-    AllocatedImage m_DepthImage;
 
     DescriptorAllocatorGrowable m_GlobalDescriptorAllocator;
     VkDescriptorSet m_DrawImageDescriptors;
@@ -143,7 +175,9 @@ private:
 
     //scene data
     GPUSceneData m_SceneData;
-    VkDescriptorSetLayout m_GPUSceneDataDescriptorSetLayout;
+    // materials
+    MaterialInstance m_DefaultData;
+    GLTFMetallic_Roughness m_MetalRoughMaterial;
 
     //textures
     AllocatedImage m_WhiteImage;

@@ -55,3 +55,20 @@ struct GPUDrawPushConstants {
         LOG_ERROR("Vulkan error occured: {}", string_VkResult(vkRes));\
         abort();                                                      \
     }
+
+enum class MaterialPass : uint8_t {
+    MainColor,
+    Transparent,
+    Other
+};
+
+struct MaterialPipeline{
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+};
+
+struct MaterialInstance{
+    MaterialPipeline* pipeline;
+    VkDescriptorSet materialSet;
+    MaterialPass passType;
+};
