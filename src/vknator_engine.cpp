@@ -246,7 +246,7 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // bind a texture
-    VkDescriptorSet imageSet = GetCurrentFrame().frameDescriptors.allocate(m_VkDevice, m_SingeImageDescriptorLayout);
+    VkDescriptorSet imageSet = GetCurrentFrame().frameDescriptors.allocate(m_VkDevice, m_SingleImageDescriptorLayout);
     {
         DescriptorWriter writer;
         writer.write_image(0, m_ErrorCheckerboardImage.imageView, m_DefaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -544,7 +544,8 @@ void VknatorEngine::InitDescriptors(){
     //create a descriptor pool that will hold 10 sets with 1 image each
 	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
 	{
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 }
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
 	};
 
     m_GlobalDescriptorAllocator.init(m_VkDevice, 10, sizes);
@@ -566,7 +567,7 @@ void VknatorEngine::InitDescriptors(){
     {
 		DescriptorLayoutBuilder builder;
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		m_SingeImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_FRAGMENT_BIT);
+		m_SingleImageDescriptorLayout = builder.build(m_VkDevice, VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 
 	//allocate a descriptor set for our draw image
@@ -595,7 +596,7 @@ void VknatorEngine::InitDescriptors(){
         m_GlobalDescriptorAllocator.destroy_pools(m_VkDevice);
         vkDestroyDescriptorSetLayout(m_VkDevice, m_DrawImageDescriptorLayout, nullptr);
         vkDestroyDescriptorSetLayout(m_VkDevice, m_GPUSceneDataDescriptorSetLayout, nullptr);
-        vkDestroyDescriptorSetLayout(m_VkDevice, m_SingeImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(m_VkDevice, m_SingleImageDescriptorLayout, nullptr);
     });
 }
 
@@ -711,7 +712,7 @@ void VknatorEngine::InitMeshPipeline(){
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = vknatorinit::pipeline_layout_create_info();
     pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &m_SingeImageDescriptorLayout;
+    pipelineLayoutInfo.pSetLayouts = &m_SingleImageDescriptorLayout;
     pipelineLayoutInfo.setLayoutCount = 1;
 
     VK_CHECK(vkCreatePipelineLayout(m_VkDevice, &pipelineLayoutInfo, nullptr, &m_MeshPipelineLayout));

@@ -188,7 +188,7 @@ private:
     VkSampler m_DefaultSamplerLinear;
     VkSampler m_DefaultSamplerNearest;
 
-    VkDescriptorSetLayout m_SingeImageDescriptorLayout;
+    VkDescriptorSetLayout m_SingleImageDescriptorLayout;
 
     bool m_ResizeRequested {false};
 

@@ -28,8 +28,8 @@ void vknatorutils::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLa
 }
 
 void vknatorutils::CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize){
-    VkImageBlit2 blitRegion{.sType= VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
-    blitRegion.srcOffsets[1].x = srcSize.width;
+   VkImageBlit2 blitRegion{.sType= VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
+   blitRegion.srcOffsets[1].x = srcSize.width;
 	blitRegion.srcOffsets[1].y = srcSize.height;
 	blitRegion.srcOffsets[1].z = 1;
 
@@ -37,7 +37,7 @@ void vknatorutils::CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage
 	blitRegion.dstOffsets[1].y = dstSize.height;
 	blitRegion.dstOffsets[1].z = 1;
 
-    blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+   blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	blitRegion.srcSubresource.baseArrayLayer = 0;
 	blitRegion.srcSubresource.layerCount = 1;
 	blitRegion.srcSubresource.mipLevel = 0;
