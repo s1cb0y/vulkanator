@@ -88,6 +88,25 @@ struct GLTFMetallic_Roughness{
     MaterialInstance WriteMaterial(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
+struct MeshNode : Node{
+    std::shared_ptr<MeshAsset> mesh;
+
+    virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+};
+
+struct RenderObject{
+    uint32_t indexCount;
+    uint32_t firstIndex;
+    VkBuffer indexBuffer;
+    MaterialInstance* material;
+
+    glm::mat4 transform;
+    VkDeviceAddress vertexBufferAddress;
+};
+struct DrawContext{
+    std::vector<RenderObject> OpaqueSurfaces;
+};
+
 class VknatorEngine{
 public:
     //init engine
@@ -133,7 +152,7 @@ private:
     AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
     AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
     void DestroyImage(const AllocatedImage& img);
-
+    void UpdateScene();
 
 private:
     SDL_Window* m_Window {nullptr};
@@ -189,6 +208,9 @@ private:
     VkSampler m_DefaultSamplerNearest;
 
     VkDescriptorSetLayout m_SingleImageDescriptorLayout;
+
+    DrawContext m_MainDrawContext;
+    std::unordered_map<std::string, std::shared_ptr<Node>> m_LoadedNodes;
 
     bool m_ResizeRequested {false};
 

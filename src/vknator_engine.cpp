@@ -114,6 +114,9 @@ void VknatorEngine::Run(){
 
 void VknatorEngine::Draw(){
 
+    UpdateScene();
+
+
     VK_CHECK(vkWaitForFences(m_VkDevice, 1, &GetCurrentFrame().renderFence, true, 1000000000));
     GetCurrentFrame().deletionQueue.Flush();
     GetCurrentFrame().frameDescriptors.clear_pools(m_VkDevice);
@@ -271,7 +274,6 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 
     vkCmdDrawIndexed(cmd, m_testMeshes[2]->surfaces[0].count, 1, m_testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
-	vkCmdEndRendering(cmd);
 
     AllocatedBuffer gpuSceneBuffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     GetCurrentFrame().deletionQueue.PushFunction([=, this](){
@@ -288,7 +290,23 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     writer.write_buffer(0, gpuSceneBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     writer.update_set(m_VkDevice, globalDescriptor);
 
+    for (const RenderObject& draw : m_MainDrawContext.OpaqueSurfaces){
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1, &globalDescriptor, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1, &draw.material->materialSet, 0, nullptr);
 
+        vkCmdBindIndexBuffer(cmd, draw.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        GPUDrawPushConstants pushConstants;
+        pushConstants.vertexBuffer = draw.vertexBufferAddress;
+        pushConstants.worldMatrix = draw.transform;
+
+        vkCmdPushConstants(cmd, draw.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+    }
+
+    vkCmdEndRendering(cmd);
 }
 
 void VknatorEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView){
@@ -876,7 +894,21 @@ void VknatorEngine::InitDefaultData() {
 	materialResources.dataBuffer = materialConstants.buffer;
 	materialResources.dataBufferOffset = 0;
 
-	m_DefaultData = m_MetalRoughMaterial.WriteMaterial(m_VkDevice,MaterialPass::MainColor,materialResources, m_GlobalDescriptorAllocator);
+    m_DefaultData = m_MetalRoughMaterial.WriteMaterial(m_VkDevice,MaterialPass::MainColor,materialResources, m_GlobalDescriptorAllocator);
+
+    for (auto& m : m_testMeshes){
+        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+        newNode->mesh = m;
+
+        newNode->localTransform = glm::mat4(1.0f);
+        newNode->worldTransform = glm::mat4(1.0f);
+
+        for (auto& s : m->surfaces){
+            s.material = std::make_shared<GLTFMaterial>(m_DefaultData);
+        }
+
+        m_LoadedNodes[m->name] = std::move(newNode);
+    }
 }
 
 void VknatorEngine::ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&function){
@@ -903,6 +935,25 @@ void VknatorEngine::ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&f
 	VK_CHECK(vkWaitForFences(m_VkDevice, 1, &m_ImmFence, true, 9999999999));
 }
 
+void VknatorEngine::UpdateScene(){
+    m_MainDrawContext.OpaqueSurfaces.clear();
+
+	m_LoadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, m_MainDrawContext);
+
+	m_SceneData.view = glm::translate(glm::vec3{ 0,0,-5 });
+	// camera projection
+	m_SceneData.proj = glm::perspective(glm::radians(70.f), (float)m_WindowExtent.width / (float)m_WindowExtent.height, 10000.f, 0.1f);
+
+	// invert the Y direction on projection matrix so that we are more similar
+	// to opengl and gltf axis
+	m_SceneData.proj[1][1] *= -1;
+	m_SceneData.viewproj = m_SceneData.proj * m_SceneData.view;
+
+	//some default lighting parameters
+	m_SceneData.ambientColor = glm::vec4(.1f);
+	m_SceneData.sunlightColor = glm::vec4(1.f);
+	m_SceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+}
 AllocatedBuffer VknatorEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage){
     //allocate the buffer
     VkBufferCreateInfo bufferInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -1137,3 +1188,23 @@ MaterialInstance GLTFMetallic_Roughness::WriteMaterial(VkDevice device, Material
 
 }
 
+
+void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx){
+    glm::mat4 nodeMatrix = topMatrix * worldTransform;
+
+    for (auto& s : mesh->surfaces){
+        RenderObject def;
+        def.indexCount = s.count;
+        def.firstIndex = s.startIndex;
+        def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
+        def.material = &s.material->data;
+
+        def.transform = nodeMatrix;
+        def.vertexBufferAddress =- mesh->meshBuffers.vertexBufferAddress;
+
+        ctx.OpaqueSurfaces.push_back(def);
+    }
+
+    //recurse down
+    Node::Draw(topMatrix, ctx);
+}
