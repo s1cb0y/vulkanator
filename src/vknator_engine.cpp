@@ -47,8 +47,8 @@ bool VknatorEngine::Init(){
     LOG_DEBUG("Init sync structures...");InitSyncStructures();
     LOG_DEBUG("Init descriptors...");   InitDescriptors();
     LOG_DEBUG("Init pipelines...");     InitPipelines();
-    LOG_DEBUG("Init default data...");  InitDefaultData();
     LOG_DEBUG("Init ImGui ...");        InitImGui();
+    LOG_DEBUG("Init default data...");  InitDefaultData();
 
     success ? LOG_INFO("Init engine done") : LOG_ERROR("Init engine failed");
     return success;
@@ -116,11 +116,9 @@ void VknatorEngine::Draw(){
 
     UpdateScene();
 
-
     VK_CHECK(vkWaitForFences(m_VkDevice, 1, &GetCurrentFrame().renderFence, true, 1000000000));
     GetCurrentFrame().deletionQueue.Flush();
     GetCurrentFrame().frameDescriptors.clear_pools(m_VkDevice);
-    VK_CHECK(vkResetFences(m_VkDevice, 1, &GetCurrentFrame().renderFence));
 
     uint32_t swapChainImageIndex;
     VkResult result = vkAcquireNextImageKHR(m_VkDevice, m_SwapChain, 1000000000, GetCurrentFrame().swapchainSemaphore, nullptr, &swapChainImageIndex);
@@ -128,13 +126,17 @@ void VknatorEngine::Draw(){
         m_ResizeRequested = true;
         return;
     }
-    VkCommandBuffer cmd = GetCurrentFrame().mainCommandBuffer;
-    VK_CHECK(vkResetCommandBuffer(cmd, 0));
-    VkCommandBufferBeginInfo cmdBeginInfo = vknatorinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-//> draw_first
+    //> draw_first
 	m_DrawExtent.width  = std::min(m_DrawImage.imageExtent.width, m_SwapChainExtent.width) * m_RenderScale;
 	m_DrawExtent.height = std::min(m_DrawImage.imageExtent.height, m_SwapChainExtent.height) * m_RenderScale;
+
+    VK_CHECK(vkResetFences(m_VkDevice, 1, &GetCurrentFrame().renderFence));
+
+    VK_CHECK(vkResetCommandBuffer(GetCurrentFrame().mainCommandBuffer, 0));
+
+    VkCommandBuffer cmd = GetCurrentFrame().mainCommandBuffer;
+
+    VkCommandBufferBeginInfo cmdBeginInfo = vknatorinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
     // transition our main draw image into general layout so we can write into it
@@ -145,7 +147,6 @@ void VknatorEngine::Draw(){
 
     vknatorutils::TransitionImage(cmd, m_DrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vknatorutils::TransitionImage(cmd, m_DepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
     DrawGeometry(cmd);
 
     //make the swapchain image into presentable mode
@@ -227,7 +228,7 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_DrawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
+   // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
 
 	//set dynamic viewport and scissor
 	VkViewport viewport = {};
@@ -248,33 +249,6 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // bind a texture
-    VkDescriptorSet imageSet = GetCurrentFrame().frameDescriptors.allocate(m_VkDevice, m_SingleImageDescriptorLayout);
-    {
-        DescriptorWriter writer;
-        writer.write_image(0, m_ErrorCheckerboardImage.imageView, m_DefaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        writer.update_set(m_VkDevice, imageSet);
-    }
-
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
-
-    // draw monkey head
-    glm::mat4 view = glm::translate(glm::vec3{0, 0, z_axis});
-    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)m_DrawExtent.width / (float)m_DrawExtent.height, 0.1f, 10000.f);
-
-    // invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-    projection[1][1] *= -1;
-	GPUDrawPushConstants push_constants;
-    push_constants.worldMatrix =  projection * view;
-    push_constants.vertexBuffer = m_testMeshes[2]->meshBuffers.vertexBufferAddress;
-
-    vkCmdPushConstants(cmd, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
-    vkCmdBindIndexBuffer(cmd, m_testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdDrawIndexed(cmd, m_testMeshes[2]->surfaces[0].count, 1, m_testMeshes[2]->surfaces[0].startIndex, 0, 0);
-
-
     AllocatedBuffer gpuSceneBuffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     GetCurrentFrame().deletionQueue.PushFunction([=, this](){
         DestroyBuffer(gpuSceneBuffer);
@@ -291,6 +265,7 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
     writer.update_set(m_VkDevice, globalDescriptor);
 
     for (const RenderObject& draw : m_MainDrawContext.OpaqueSurfaces){
+
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1, &globalDescriptor, 0, nullptr);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1, &draw.material->materialSet, 0, nullptr);
@@ -622,8 +597,10 @@ void VknatorEngine::InitPipelines(){
     // COMPUTE PIPELINE
     InitBackgroundPipelines();
     // GRAPHICS PIPELINE
+    LOG_DEBUG("Init mesh pipeline");
     InitMeshPipeline();
     // MATERIAL PIPELINES
+    LOG_DEBUG("Init material pipelines");
     m_MetalRoughMaterial.BuildPipelines(this);
 }
 
@@ -832,7 +809,6 @@ void VknatorEngine::InitImGui(){
 
 void VknatorEngine::InitDefaultData() {
 
-    m_testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
 
     uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1 ,1));
     m_WhiteImage = CreateImage((void*) &white, VkExtent3D{1,1,1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -846,8 +822,8 @@ void VknatorEngine::InitDefaultData() {
     uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1 ,1));
     std::array<uint32_t, 16 *16 > pixels; //for 16x16 checkerboard texture
 	for (int x = 0; x < 16; x++) {
-		for (int y = 0; y < 16; y++) {
-			pixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+        for (int y = 0; y < 16; y++) {
+            pixels[y*16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
 		}
 	}
 
@@ -888,13 +864,15 @@ void VknatorEngine::InitDefaultData() {
 	sceneUniformData->metal_rough_factors = glm::vec4{1,0.5,0,0};
 
 	m_MainDeletionQueue.PushFunction([=, this]() {
-		DestroyBuffer(materialConstants);
+        DestroyBuffer(materialConstants);
 	});
 
 	materialResources.dataBuffer = materialConstants.buffer;
 	materialResources.dataBufferOffset = 0;
 
     m_DefaultData = m_MetalRoughMaterial.WriteMaterial(m_VkDevice,MaterialPass::MainColor,materialResources, m_GlobalDescriptorAllocator);
+
+    m_testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
 
     for (auto& m : m_testMeshes){
         std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
@@ -938,7 +916,19 @@ void VknatorEngine::ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&f
 void VknatorEngine::UpdateScene(){
     m_MainDrawContext.OpaqueSurfaces.clear();
 
-	m_LoadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, m_MainDrawContext);
+//	m_LoadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, m_MainDrawContext);
+
+    for (auto& m : m_LoadedNodes) {
+		m.second->Draw(glm::mat4{1.f}, m_MainDrawContext);
+	}
+
+	for (int x = -3; x < 3; x++) {
+
+		glm::mat4 scale = glm::scale(glm::vec3{0.2});
+		glm::mat4 translation =  glm::translate(glm::vec3{x, 1, 0});
+
+		m_LoadedNodes["Cube"]->Draw(translation * scale, m_MainDrawContext);
+	}
 
 	m_SceneData.view = glm::translate(glm::vec3{ 0,0,-5 });
 	// camera projection
@@ -1114,8 +1104,8 @@ void GLTFMetallic_Roughness::BuildPipelines(VknatorEngine* engine){
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_SAMPLER);
-    layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_SAMPLER);
+    layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     materialLayout = layoutBuilder.build(engine->m_VkDevice, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     VkDescriptorSetLayout layouts[] = {engine->m_GPUSceneDataDescriptorSetLayout, materialLayout };
