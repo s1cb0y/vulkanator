@@ -228,8 +228,6 @@ void VknatorEngine::DrawGeometry(VkCommandBuffer cmd){
 	VkRenderingInfo renderInfo = vknatorinit::rendering_info(m_DrawExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
-   // vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
-
 	//set dynamic viewport and scissor
 	VkViewport viewport = {};
 	viewport.x = 0;
@@ -886,6 +884,7 @@ void VknatorEngine::InitDefaultData() {
         }
 
         m_LoadedNodes[m->name] = std::move(newNode);
+        LOG_DEBUG("Loaded mesh: {}", m->name);
     }
 }
 
@@ -916,11 +915,10 @@ void VknatorEngine::ImmediateSubmit(std::function<void(VkCommandBuffer &cmd)>&&f
 void VknatorEngine::UpdateScene(){
     m_MainDrawContext.OpaqueSurfaces.clear();
 
-//	m_LoadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, m_MainDrawContext);
-
     for (auto& m : m_LoadedNodes) {
 		m.second->Draw(glm::mat4{1.f}, m_MainDrawContext);
 	}
+    //m_LoadedNodes["Suzanne"]->Draw(glm::rotate(glm::radians(180.f), glm::vec3{0,1,0}) * glm::translate(glm::vec3{1, 1, 1}), m_MainDrawContext);
 
 	for (int x = -3; x < 3; x++) {
 
@@ -1190,7 +1188,7 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx){
         def.material = &s.material->data;
 
         def.transform = nodeMatrix;
-        def.vertexBufferAddress =- mesh->meshBuffers.vertexBufferAddress;
+        def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 
         ctx.OpaqueSurfaces.push_back(def);
     }
